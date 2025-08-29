@@ -1,9 +1,12 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import withAuth from "@/app/withAuth";
 
-export default async function PollDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+function PollDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
 
   // Poll data based on ID
   const getPollData = (pollId: string) => {
@@ -90,7 +93,7 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
             {/* Poll options */}
             <div className="space-y-4">
               {pollData.options.map((opt) => (
-                <div key={opt.id} className="flex items-center p-6 border border-gray-300 rounded-lg bg-white">
+                <div key={opt.id} className="flex items-center p-6 border border-gray-300 rounded-lg bg-.white">
                   <span className="font-bold text-xl text-black">{opt.label}</span>
                 </div>
               ))}
@@ -123,6 +126,8 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
     </div>
   );
 }
+
+export default withAuth(PollDetailPage);
 
 
 
