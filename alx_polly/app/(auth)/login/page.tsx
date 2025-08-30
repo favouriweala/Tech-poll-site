@@ -24,7 +24,7 @@ export default function LoginPage() {
     if (error) {
       console.error('Error logging in:', error.message);
     } else {
-      router.push('/polls');
+      router.push('/dashboard');
     }
   };
 

@@ -37,6 +37,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
+  console.log("Current user from AuthContext:", user);
+
   return (
     <AuthContext.Provider value={{ session, user, loading }}>
       {children}

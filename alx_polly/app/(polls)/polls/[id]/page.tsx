@@ -71,7 +71,7 @@ function PollDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="min-h-screen bg-white py-8">
-      <div className="container mx-auto max-w-4xl px-4">
+  <div className="container mx-auto max-w-[1200px] px-4">
         {/* Back to Polls link and Edit/Delete buttons on same line */}
         <div className="mb-6 flex items-center justify-between">
           <Link href="/polls" className="text-blue-600 hover:underline text-lg font-bold">
@@ -84,9 +84,9 @@ function PollDetailPage({ params }: { params: { id: string } }) {
         </div>
 
         {/* Main poll card */}
-        <Card className="w-full bg-white border border-gray-300 shadow-2xl">
+  <Card className="w-full bg-white border border-gray-300 shadow-2xl max-w-[1100px] mx-auto">
           <CardHeader className="text-left px-8 py-6">
-            <CardTitle className="text-3xl font-bold text-black">{pollData.title}</CardTitle>
+            <CardTitle className="text-3xl font-bold text-black whitespace-nowrap">{pollData.title}</CardTitle>
             <CardDescription className="text-xl text-black mt-3 font-normal">{pollData.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-8 pb-8">
