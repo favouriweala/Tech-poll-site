@@ -1,0 +1,119 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { Button } from '@/components/ui/button';
+import { submitVote } from '@/lib/actions';
+
+interface PollOption {
+  option_id: string;
+  option_text: string;
+  order_index: number;
+  vote_count: number;
+  vote_percentage: number;
+}
+
+interface Poll {
+  id: string;
+  title: string;
+  description?: string;
+  allow_multiple_selections: boolean;
+  options: PollOption[];
+}
+
+interface PollVotingFormProps {
+  poll: Poll;
+  userId?: string;
+  allowMultiple: boolean;
+}
+
+export default function PollVotingForm({ poll, userId, allowMultiple }: PollVotingFormProps) {
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string>('');
+
+  const handleOptionChange = (optionId: string) => {
+    if (allowMultiple) {
+      setSelectedOptions(prev => 
+        prev.includes(optionId) 
+          ? prev.filter(id => id !== optionId)
+          : [...prev, optionId]
+      );
+    } else {
+      setSelectedOptions([optionId]);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (selectedOptions.length === 0) {
+      setError('Please select at least one option');
+      return;
+    }
+
+    setError('');
+    
+    startTransition(async () => {
+      try {
+        // Submit votes for all selected options
+        for (const optionId of selectedOptions) {
+          await submitVote(poll.id, optionId, userId);
+        }
+        // Page will be revalidated and show results
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to submit vote');
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <h3 className="text-xl font-semibold text-black mb-4">
+          {allowMultiple ? 'Select one or more options:' : 'Select one option:'}
+        </h3>
+        
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
+
+        {poll.options.map((option) => (
+          <div 
+            key={option.option_id} 
+            className="flex items-center p-6 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+            onClick={() => !isPending && handleOptionChange(option.option_id)}
+          >
+            <input
+              type={allowMultiple ? 'checkbox' : 'radio'}
+              name={allowMultiple ? 'poll-options' : 'poll-option'}
+              value={option.option_id}
+              checked={selectedOptions.includes(option.option_id)}
+              onChange={() => handleOptionChange(option.option_id)}
+              className="mr-4 h-5 w-5 text-blue-600"
+              disabled={isPending}
+            />
+            <span className="font-bold text-xl text-black flex-1">
+              {option.option_text}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-center pt-4">
+        <Button
+          onClick={handleSubmit}
+          disabled={selectedOptions.length === 0 || isPending}
+          className="bg-black text-white hover:bg-gray-800 px-8 py-3 text-lg font-bold min-w-[150px]"
+        >
+          {isPending ? 'Submitting...' : 'Submit Vote'}
+        </Button>
+      </div>
+
+      {allowMultiple && (
+        <p className="text-sm text-gray-600 text-center">
+          You can select multiple options for this poll
+        </p>
+      )}
+    </div>
+  );
+}

@@ -1,67 +1,140 @@
-"use client";
-
-import { useAuth } from "../(auth)/context/authContext";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "../../components/ui/separator";
-import { useEffect, useState } from "react";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { getUserPolls, getPublicPolls } from "@/lib/actions";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import UserPollsList from "./UserPollsList";
 
+async function Dashboard() {
+  // Get current user
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-export default function Dashboard() {
-  const { user } = useAuth();
-  const [activePolls, setActivePolls] = useState(0);
-  const [pollsVoted, setPollsVoted] = useState(0);
+  if (!user) {
+    notFound();
+  }
 
-  useEffect(() => {
-    // Simulate fetching poll data from the polls page
-    // Replace this with a real API call if you have one
-    const samplePolls = [
-      { id: "1", title: "Favourite Programming Language", votes: 452 },
-      { id: "2the", title: "Best Frontend Framework", votes: 368 },
-      { id: "3", title: "Preferred Database", votes: 279 },
-    ];
-    setActivePolls(samplePolls.length);
-    // Show total votes for all polls
-    const totalVotes = samplePolls.reduce((sum, poll) => sum + poll.votes, 0);
-    setPollsVoted(totalVotes);
-  }, []);
+  // Fetch user's polls and general statistics
+  const [userPolls, allPolls] = await Promise.all([
+    getUserPolls(user.id),
+    getPublicPolls()
+  ]);
+
+  // Calculate statistics
+  const totalUserPolls = userPolls.length;
+  const totalVotesOnUserPolls = userPolls.reduce((sum, poll) => sum + (poll.total_votes || 0), 0);
+  const totalPublicPolls = allPolls.length;
+  const activeUserPolls = userPolls.filter(poll => poll.is_active).length;
 
   return (
-    <section className="min-h-[80vh] flex flex-col items-center justify-center bg-[#f7fafd] py-12 px-4">
-      <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-lg border border-gray-200 p-10 flex flex-col items-center">
-        {user ? (
-          <>
-            <h1 className="text-4xl font-extrabold text-black mb-2 tracking-tight">Welcome back, {user?.email?.split("@")?.[0] ?? "User"}! 👋</h1>
-            <p className="text-lg text-gray-700 mb-6">Ready to create your next poll or see your results? Let’s dive in.</p>
-            <div className="flex flex-col md:flex-row gap-6 w-full mb-8">
-              <a href="/polls" className="flex-1">
-                <div className="p-8 bg-gradient-to-br from-blue-600 to-blue-400 rounded-xl shadow hover:shadow-xl transition cursor-pointer flex flex-col items-center border-2 border-blue-100 hover:scale-[1.03]">
-                  <p className="text-white text-lg font-semibold mb-2">📊 All active polls</p>
-                  <p className="text-3xl font-bold text-white">{activePolls}</p>
-                </div>
-              </a>
-              <a href="/polls/voted" className="flex-1">
-                <div className="p-8 bg-gradient-to-br from-green-500 to-green-400 rounded-xl shadow hover:shadow-xl transition cursor-pointer flex flex-col items-center border-2 border-green-100 hover:scale-[1.03]">
-                  <p className="text-white text-lg font-semibold mb-2">✅ Poll results</p>
-                  <p className="text-3xl font-bold text-white">{pollsVoted}</p>
-                </div>
-              </a>
-            </div>
-            <div className="flex flex-col md:flex-row gap-4 w-full justify-center items-center">
-              <a href="/polls/new" className="w-full md:w-auto">
-                <Button className="w-full md:w-auto bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg px-6 py-3 text-lg shadow">Create New Poll</Button>
-              </a>
-              <a href="/polls" className="w-full md:w-auto">
-                <Button className="w-full md:w-auto bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-lg px-6 py-3 text-lg shadow">Go to My Polls</Button>
-              </a>
-            </div>
-          </>
-        ) : (
-          <p className="text-red-500 text-center mt-10 text-lg font-semibold">
-            No user found. Please log in to access your dashboard.
+    <section className="min-h-[80vh] bg-[#f7fafd] py-12 px-4">
+      <div className="w-full max-w-7xl mx-auto">
+        {/* Welcome Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-extrabold text-black mb-4 tracking-tight">
+            Welcome back, {user.user_metadata?.full_name || user.email?.split("@")?.[0] || "User"}! 👋
+          </h1>
+          <p className="text-lg text-gray-700 mb-8">
+            Manage your polls, view statistics, and create new polls from your dashboard.
           </p>
-        )}
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <Card className="bg-gradient-to-br from-blue-600 to-blue-400 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white/90 text-sm font-medium">Your Polls</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{totalUserPolls}</div>
+              <p className="text-white/80 text-sm">{activeUserPolls} active</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-green-500 to-green-400 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white/90 text-sm font-medium">Total Votes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{totalVotesOnUserPolls}</div>
+              <p className="text-white/80 text-sm">on your polls</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-500 to-purple-400 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white/90 text-sm font-medium">Public Polls</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{totalPublicPolls}</div>
+              <p className="text-white/80 text-sm">total available</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-orange-500 to-orange-400 text-white border-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white/90 text-sm font-medium">Unique Voters</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {userPolls.reduce((sum, poll) => sum + (poll.unique_voters || 0), 0)}
+              </div>
+              <p className="text-white/80 text-sm">participated</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-12 justify-center">
+          <Link href="/polls/new">
+            <Button className="bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg px-8 py-3 text-lg shadow-lg">
+              ✨ Create New Poll
+            </Button>
+          </Link>
+          <Link href="/polls">
+            <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold rounded-lg px-8 py-3 text-lg shadow-lg">
+              🌐 Browse All Polls
+            </Button>
+          </Link>
+        </div>
+
+        <Separator className="mb-12" />
+
+        {/* User's Polls Management */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-3xl font-bold text-black">Your Polls</h2>
+            <Link href="/polls/new">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                Create Poll
+              </Button>
+            </Link>
+          </div>
+
+          {totalUserPolls === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <h3 className="text-xl font-semibold text-gray-700 mb-4">No polls yet</h3>
+                <p className="text-gray-500 mb-6">
+                  You haven't created any polls yet. Start by creating your first poll!
+                </p>
+                <Link href="/polls/new">
+                  <Button className="bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg px-6 py-2">
+                    Create Your First Poll
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            <UserPollsList polls={userPolls} userId={user.id} />
+          )}
+        </div>
       </div>
     </section>
   );
 }
+
+export default Dashboard;
 

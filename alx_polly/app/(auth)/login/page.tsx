@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase-client';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -16,6 +16,8 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const supabase = createClient();
+    
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -24,6 +26,7 @@ export default function LoginPage() {
     if (error) {
       console.error('Error logging in:', error.message);
     } else {
+      console.log('Login successful, redirecting...');
       router.push('/dashboard');
     }
   };
