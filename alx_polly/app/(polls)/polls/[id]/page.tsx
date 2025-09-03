@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPollWithResults, getUserVotes, deletePoll } from "@/lib/actions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createOptimizedVoteProcessor } from "@/lib/vote-utils";
 import PollVotingForm from "./PollVotingForm";
 import PollResults from "./PollResults";
 import ShareButtons from "./ShareButtons";
@@ -41,6 +42,10 @@ async function PollDetailPage({ params }: PollDetailPageProps) {
   const isPollEnded = poll.end_date && new Date(poll.end_date) <= new Date();
   const isActive = poll.is_active && !isPollEnded;
 
+  // OPTIMIZED: Create vote processor for efficient calculations
+  const voteProcessor = createOptimizedVoteProcessor(poll.options);
+  const { totalVotes, uniqueVoters } = voteProcessor.getStats();
+
   return (
     <div className="min-h-screen bg-white py-8">
       <div className="container mx-auto max-w-[1200px] px-4">
@@ -54,7 +59,10 @@ async function PollDetailPage({ params }: PollDetailPageProps) {
               <Button variant="outline" className="bg-white text-black hover:bg-gray-100 border-gray-300 text-lg font-bold">
                 Edit Poll
               </Button>
-              <form action={deletePoll.bind(null, id)}>
+              <form action={async () => {
+                'use server';
+                await deletePoll(id);
+              }}>
                 <Button 
                   type="submit" 
                   variant="outline" 
@@ -112,7 +120,7 @@ async function PollDetailPage({ params }: PollDetailPageProps) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">
-                    {poll.options.reduce((sum, option) => sum + (option.vote_count || 0), 0)}
+                    {totalVotes}
                   </div>
                   <div className="text-sm text-gray-600">Total Votes</div>
                 </div>
@@ -124,7 +132,7 @@ async function PollDetailPage({ params }: PollDetailPageProps) {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600">
-                    {new Set(poll.options.flatMap(option => option.voters || [])).size}
+                    {uniqueVoters}
                   </div>
                   <div className="text-sm text-gray-600">Unique Voters</div>
                 </div>

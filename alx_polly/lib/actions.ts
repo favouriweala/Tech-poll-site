@@ -175,7 +175,7 @@ export async function getUserPolls(userId: string) {
   }
 }
 
-// Get a single poll with its options and results
+// Get a single poll with its options and results (OPTIMIZED)
 export async function getPollWithResults(pollId: string) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -195,32 +195,26 @@ export async function getPollWithResults(pollId: string) {
       return null
     }
 
-    // Get poll options with vote counts
-    const { data: options, error: optionsError } = await supabase
-      .from('poll_options')
-      .select(`
-        *,
-        votes(id)
-      `)
+    // OPTIMIZED: Use database view for aggregated results instead of fetching all votes
+    const { data: pollResults, error: resultsError } = await supabase
+      .from('poll_results')
+      .select('option_id, option_text, order_index, vote_count, vote_percentage')
       .eq('poll_id', pollId)
       .order('order_index', { ascending: true })
 
-    if (optionsError) {
-      console.error('Error fetching poll options:', optionsError)
+    if (resultsError) {
+      console.error('Error fetching poll results:', resultsError)
       return { ...poll, options: [] }
     }
 
-    // Calculate vote statistics for each option
-    const optionsWithStats = (options || []).map(option => {
-      const voteCount = option.votes?.length || 0
-      return {
-        option_id: option.id,
-        option_text: option.text,
-        order_index: option.order_index,
-        vote_count: voteCount,
-        vote_percentage: 0 // Will be calculated on frontend
-      }
-    })
+    // Transform to expected format
+    const optionsWithStats = (pollResults || []).map(result => ({
+      option_id: result.option_id,
+      option_text: result.option_text,
+      order_index: result.order_index,
+      vote_count: result.vote_count || 0,
+      vote_percentage: result.vote_percentage || 0
+    }))
 
     return {
       ...poll,

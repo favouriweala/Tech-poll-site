@@ -1,5 +1,8 @@
 'use client';
 
+import { useMemo } from 'react';
+import { createOptimizedVoteProcessor } from '@/lib/vote-utils';
+
 interface PollOption {
   option_id: string;
   option_text: string;
@@ -23,8 +26,13 @@ interface PollResultsProps {
 }
 
 export default function PollResults({ poll, userVotes, showVotes }: PollResultsProps) {
-  const totalVotes = poll.options.reduce((sum, option) => sum + (option.vote_count || 0), 0);
-  const maxVotes = Math.max(...poll.options.map(option => option.vote_count || 0));
+  // OPTIMIZED: Use efficient vote processor instead of repeated array operations
+  const voteProcessor = useMemo(() => 
+    createOptimizedVoteProcessor(poll.options), 
+    [poll.options]
+  );
+  
+  const { totalVotes, maxVotes } = voteProcessor.getStats();
 
   return (
     <div className="space-y-6">
@@ -32,10 +40,11 @@ export default function PollResults({ poll, userVotes, showVotes }: PollResultsP
         <h3 className="text-xl font-semibold text-black mb-4">Poll Results</h3>
 
         {poll.options.map((option) => {
-          const voteCount = option.vote_count || 0;
-          const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+          // OPTIMIZED: Use pre-calculated values from vote processor
+          const voteCount = voteProcessor.getVoteCount(option.option_id);
+          const percentage = voteProcessor.getPercentage(option.option_id);
           const isUserChoice = userVotes.includes(option.option_id);
-          const isWinning = maxVotes > 0 && voteCount === maxVotes;
+          const isWinning = voteProcessor.isWinning(option.option_id);
 
           return (
             <div 

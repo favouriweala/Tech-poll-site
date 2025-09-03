@@ -32,8 +32,9 @@ This document tracks all tasks, features, and development milestones for the ALX
 | T002 | 🟢 | Medium | Set up Project Documentation | Low | - | System | Dec 2024 |
 | T003 | 🟢 | Medium | Update README with Project Details | Low | T002 | System | Dec 2024 |
 | T004 | 🟢 | Low | Create Task Manager Documentation | Low | T002 | System | Dec 2024 |
-| T005 | 🔴 | High | Integrate Database with Application | High | T001 | - | TBD |
-| T006 | 🔴 | High | Replace Mock Data with Real Database | Medium | T005 | - | TBD |
+| T005 | 🟢 | High | Integrate Database with Application | High | T001 | System | Dec 2024 |
+| T006 | 🟢 | High | Replace Mock Data with Real Database | Medium | T005 | System | Dec 2024 |
+| T031 | 🟢 | Medium | Refactor UserPollsList Component | Medium | T005 | System | Dec 2024 |
 | T007 | 🔴 | Medium | Implement Real-time Poll Updates | Medium | T005 | - | TBD |
 | T008 | 🔴 | Medium | Add Anonymous Voting System | Medium | T005 | - | TBD |
 | T009 | 🔴 | Low | Create Integration Tests | High | T005 | - | TBD |
@@ -49,6 +50,9 @@ This document tracks all tasks, features, and development milestones for the ALX
 | T002 | Set up Project Documentation | Dec 2024 | Created project-log.md for tracking project history |
 | T003 | Update README with Project Details | Dec 2024 | Comprehensive README with setup instructions |
 | T004 | Create Task Manager Documentation | Dec 2024 | This document for tracking project tasks |
+| T005 | Integrate Database with Application | Dec 2024 | Complete integration with Supabase database |
+| T006 | Replace Mock Data with Real Database | Dec 2024 | All components now use real database operations |
+| T031 | Refactor UserPollsList Component | Dec 2024 | Major refactoring for better maintainability and reusability |
 
 ---
 
