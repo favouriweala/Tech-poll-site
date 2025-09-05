@@ -1,4 +1,11 @@
 'use client';
+/**
+ * PollResults component displays the results of a poll.
+ * @param poll - The poll object containing the poll details.
+ * @param userVotes - An array of user vote IDs.
+ * @param showVotes - A boolean indicating whether to show the votes.
+ * @returns A React component displaying the poll results.
+ */
 
 import { useMemo } from 'react';
 import { createOptimizedVoteProcessor } from '@/lib/vote-utils';

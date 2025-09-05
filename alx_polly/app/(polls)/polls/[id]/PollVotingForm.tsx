@@ -1,9 +1,42 @@
 'use client';
 
+/**
+ * PollVotingForm Component
+ * 
+ * WHAT: Interactive voting interface that allows users to cast votes on poll options
+ * with adaptive behavior for single-choice vs multiple-choice polls.
+ * 
+ * WHY: A dedicated voting component is essential because:
+ * 1. Voting is the core interaction in a polling application
+ * 2. Different poll types (single vs multiple choice) require different UI behavior
+ * 3. Real-time validation prevents user errors and improves experience
+ * 4. Loading states provide feedback during network operations
+ * 5. Accessibility ensures all users can participate in voting
+ * 6. Error handling guides users through voting issues
+ * 
+ * HOW: Uses React state and transitions for smooth user experience:
+ * - useState manages selected options with different logic per poll type
+ * - useTransition provides loading states without blocking UI
+ * - Form validation prevents submission of invalid selections
+ * - Server actions handle vote submission with proper error handling
+ * - Accessible radio/checkbox inputs ensure proper keyboard navigation
+ * 
+ * Features:
+ * - Single and multiple selection support
+ * - Real-time form validation
+ * - Optimistic UI updates with loading states
+ * - Error handling and user feedback
+ * - Accessible form controls (radio/checkbox)
+ * - Prevents duplicate submissions
+ * 
+ * @component
+ */
+
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { submitVote } from '@/lib/actions';
 
+/** Represents a poll option with voting statistics */
 interface PollOption {
   option_id: string;
   option_text: string;
@@ -12,6 +45,7 @@ interface PollOption {
   vote_percentage: number;
 }
 
+/** Complete poll data structure for voting */
 interface Poll {
   id: string;
   title: string;
@@ -20,17 +54,40 @@ interface Poll {
   options: PollOption[];
 }
 
+/** Props for the PollVotingForm component */
 interface PollVotingFormProps {
+  /** Poll data containing options and settings */
   poll: Poll;
+  /** Optional authenticated user ID */
   userId?: string;
+  /** Whether multiple selections are allowed */
   allowMultiple: boolean;
 }
 
+/**
+ * PollVotingForm Component Implementation
+ * 
+ * Renders an interactive voting form that adapts to poll settings (single/multiple choice).
+ * Handles vote submission with proper error handling and loading states.
+ * 
+ * @param poll - Poll data with options and settings
+ * @param userId - Optional authenticated user ID for vote attribution
+ * @param allowMultiple - Whether multiple option selection is allowed
+ * @returns React component for poll voting interface
+ */
 export default function PollVotingForm({ poll, userId, allowMultiple }: PollVotingFormProps) {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string>('');
 
+  /**
+   * Handles option selection/deselection based on poll type
+   * 
+   * WHY: Different poll types require different selection logic:
+   * - Single choice polls should replace the current selection (radio behavior)
+   * - Multiple choice polls should toggle selections (checkbox behavior)
+   * - This prevents user confusion and ensures correct voting behavior
+   */
   const handleOptionChange = (optionId: string) => {
     if (allowMultiple) {
       setSelectedOptions(prev => 
@@ -43,6 +100,15 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
     }
   };
 
+  /**
+   * Handles vote submission with validation and error handling
+   * 
+   * WHY: Comprehensive vote submission handling is crucial because:
+   * - Client-side validation prevents unnecessary server requests
+   * - Loading states inform users that their vote is being processed
+   * - Error handling provides clear feedback for voting issues
+   * - Multiple option submission requires proper sequencing for multiple-choice polls
+   */
   const handleSubmit = async () => {
     if (selectedOptions.length === 0) {
       setError('Please select at least one option');

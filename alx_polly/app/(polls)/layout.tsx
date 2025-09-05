@@ -6,6 +6,12 @@ import { useAuth } from "@/app/(auth)/context/authContext";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+/**
+ * PollsLayout component is the layout for the polls page.
+ * @param children - The children components.
+ * @returns A React component displaying the polls layout.
+ */
+
 
 export default function PollsLayout({ children }: { children: React.ReactNode }) {
   const { user, session } = useAuth();
