@@ -163,6 +163,17 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 6. **User Profile**: Enhance user profile page with poll management features
 
 ## Recent Changes
+- **December 2024**: Comprehensive Code Documentation Enhancement (WHAT/WHY/HOW)
+  - **Enhanced Documentation Structure**: All docstrings now comprehensively explain WHAT the code does, WHY it exists, and HOW it works
+  - **Authentication Documentation**: Detailed explanation of centralized auth state management, real-time listeners, and session persistence
+  - **Poll Management Documentation**: Complete documentation of server actions with security rationale and atomic transaction handling
+  - **Voting System Documentation**: Comprehensive voting logic documentation with validation reasoning and performance considerations
+  - **Dashboard Components Documentation**: Detailed component architecture with data flow and user experience rationale
+  - **Performance Utilities Documentation**: In-depth performance optimization explanations with algorithm complexity and benchmarking results
+  - **API Documentation**: JSDoc comments with practical examples and implementation reasoning
+  - **Type Definitions**: Enhanced interface documentation with detailed property descriptions and usage context
+  - **Usage Examples**: Real-world code examples with implementation best practices
+  - **Architecture Explanations**: Detailed reasoning for design decisions and technology choices throughout the codebase
 - **December 2024**: Major performance optimization for vote tallying system
   - **Database Optimizations**: Replaced N+1 queries with aggregated database views (`poll_stats`, `poll_results`)
   - **Efficient Data Structures**: Implemented O(1) vote lookups using Map-based VoteLookup class
