@@ -33,8 +33,13 @@
  */
 
 import { useState, useTransition } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { submitVote } from '@/lib/actions';
+import { VoteSubmissionSchema, validateRateLimit } from '@/lib/validation-utils';
 
 /** Represents a poll option with voting statistics */
 interface PollOption {
@@ -64,6 +69,8 @@ interface PollVotingFormProps {
   allowMultiple: boolean;
 }
 
+type VoteFormData = z.infer<typeof VoteSubmissionSchema>;
+
 /**
  * PollVotingForm Component Implementation
  * 
@@ -76,9 +83,17 @@ interface PollVotingFormProps {
  * @returns React component for poll voting interface
  */
 export default function PollVotingForm({ poll, userId, allowMultiple }: PollVotingFormProps) {
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string>('');
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+
+  const form = useForm<VoteFormData>({
+    resolver: zodResolver(VoteSubmissionSchema),
+    defaultValues: {
+      pollId: poll.id,
+      optionIds: []
+    }
+  });
 
   /**
    * Handles option selection/deselection based on poll type
@@ -89,15 +104,34 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
    * - This prevents user confusion and ensures correct voting behavior
    */
   const handleOptionChange = (optionId: string) => {
+    const currentOptions = form.getValues('optionIds');
+    
     if (allowMultiple) {
-      setSelectedOptions(prev => 
-        prev.includes(optionId) 
-          ? prev.filter(id => id !== optionId)
-          : [...prev, optionId]
+      const isSelected = currentOptions.includes(optionId);
+      form.setValue('optionIds', 
+        isSelected 
+          ? currentOptions.filter(id => id !== optionId)
+          : [...currentOptions, optionId]
       );
     } else {
-      setSelectedOptions([optionId]);
+      form.setValue('optionIds', [optionId]);
     }
+    
+    // Clear errors when user makes a selection
+    if (error) setError('');
+    if (rateLimitError) setRateLimitError(null);
+  };
+
+  // Rate limiting check
+  const checkRateLimit = (): boolean => {
+    const rateLimit = validateRateLimit('submit_vote', 10, 60000); // 10 votes per minute
+    if (!rateLimit.allowed) {
+      const resetTime = new Date(rateLimit.resetTime).toLocaleTimeString();
+      setRateLimitError(`Too many vote attempts. Please try again after ${resetTime}.`);
+      return false;
+    }
+    setRateLimitError(null);
+    return true;
   };
 
   /**
@@ -109,24 +143,27 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
    * - Error handling provides clear feedback for voting issues
    * - Multiple option submission requires proper sequencing for multiple-choice polls
    */
-  const handleSubmit = async () => {
-    if (selectedOptions.length === 0) {
-      setError('Please select at least one option');
-      return;
-    }
-
+  const handleSubmit = async (data: VoteFormData) => {
     setError('');
     
     startTransition(async () => {
       try {
+        // Check rate limiting
+        if (!checkRateLimit()) {
+          return;
+        }
+
         // Submit votes for all selected options
-        for (const optionId of selectedOptions) {
-          const result = await submitVote(poll.id, optionId, userId);
-          
-          if (!result.success) {
-            setError(result.error);
-            return;
-          }
+        const result = await submitVote(poll.id, data.optionIds, userId);
+        
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+        
+        // Clear rate limiting data on successful vote
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('rate_limit_submit_vote');
         }
         // Page will be revalidated and show results
       } catch (err) {
@@ -142,10 +179,16 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
           {allowMultiple ? 'Select one or more options:' : 'Select one option:'}
         </h3>
         
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
+        {(error || rateLimitError) && (
+          <Alert variant="destructive">
+            <AlertDescription>{error || rateLimitError}</AlertDescription>
+          </Alert>
+        )}
+
+        {form.formState.errors.optionIds && (
+          <Alert variant="destructive">
+            <AlertDescription>{form.formState.errors.optionIds.message}</AlertDescription>
+          </Alert>
         )}
 
         {poll.options.map((option) => (
@@ -158,7 +201,7 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
               type={allowMultiple ? 'checkbox' : 'radio'}
               name={allowMultiple ? 'poll-options' : 'poll-option'}
               value={option.option_id}
-              checked={selectedOptions.includes(option.option_id)}
+              checked={form.watch('optionIds').includes(option.option_id)}
               onChange={() => handleOptionChange(option.option_id)}
               className="mr-4 h-5 w-5 text-blue-600"
               disabled={isPending}
@@ -172,8 +215,8 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
 
       <div className="flex justify-center pt-4">
         <Button
-          onClick={handleSubmit}
-          disabled={selectedOptions.length === 0 || isPending}
+          onClick={form.handleSubmit(handleSubmit)}
+          disabled={form.watch('optionIds').length === 0 || isPending || !!rateLimitError}
           className="bg-black text-white hover:bg-gray-800 px-8 py-3 text-lg font-bold min-w-[150px]"
         >
           {isPending ? 'Submitting...' : 'Submit Vote'}

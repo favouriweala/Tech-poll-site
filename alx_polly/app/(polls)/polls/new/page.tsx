@@ -7,184 +7,120 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useForm, useFieldArray, type SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import withAuth from "@/app/withAuth";
 import { createPoll } from "@/lib/actions";
+import { PollCreationSchema, validateRateLimit } from '@/lib/validation-utils';
 import { Textarea } from "@/components/ui/textarea";
+import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+type PollFormData = z.infer<typeof PollCreationSchema>;
 
 function NewPollPage() {
   const [activeTab, setActiveTab] = useState<'basic' | 'settings'>('basic');
-  const [options, setOptions] = useState<string[]>(['', '']);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
+  const form = useForm({
+    resolver: zodResolver(PollCreationSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      options: [{ text: '' }, { text: '' }],
+      allowMultipleSelections: false,
+      isPublic: true,
+      endDate: undefined
+    }
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: 'options'
+  });
+
   const addOption = () => {
-    setOptions([...options, '']);
+    if (fields.length < 10) {
+      append({ text: '' });
+    }
   };
 
   const removeOption = (index: number) => {
-    if (options.length <= 2) return; // Keep at least 2 options
-    const newOptions = [...options];
-    newOptions.splice(index, 1);
-    setOptions(newOptions);
+    if (fields.length > 2) {
+      remove(index);
+    }
   };
 
-  const handleOptionChange = (index: number, value: string) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
+  // Rate limiting check
+  const checkRateLimit = (): boolean => {
+    const rateLimit = validateRateLimit('create_poll', 5, 300000); // 5 polls per 5 minutes
+    if (!rateLimit.allowed) {
+      const resetTime = new Date(rateLimit.resetTime).toLocaleTimeString();
+      setRateLimitError(`Too many poll creation attempts. Please try again after ${resetTime}.`);
+      return false;
+    }
+    setRateLimitError(null);
+    return true;
   };
 
-  // Input sanitization helper
-  const sanitizeInput = (input: string): string => {
-    return input
-      .trim()
-      .replace(/[<>"'&]/g, (match) => {
-        const htmlEntities: { [key: string]: string } = {
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#x27;',
-          '&': '&amp;'
-        };
-        return htmlEntities[match] || match;
-      })
-      .replace(/\s+/g, ' '); // Replace multiple spaces with single space
+  // Clear errors when user starts typing
+  const clearErrors = () => {
+    if (error) setError(null);
+    if (rateLimitError) setRateLimitError(null);
   };
 
-  const handleSubmit = async (formData: FormData) => {
+
+
+  const handleSubmit = async (data: any) => {
+    setIsSubmitting(true);
+    setError(null);
+
     try {
-      setIsSubmitting(true);
-      setError(null);
-      
-      // Validate and sanitize form inputs
-      const rawTitle = formData.get('title') as string;
-      const rawDescription = formData.get('description') as string;
-      
-      if (!rawTitle || rawTitle.trim() === '') {
-        setError('Poll title is required');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      const title = sanitizeInput(rawTitle);
-      const description = rawDescription ? sanitizeInput(rawDescription) : '';
-      
-      // Validate title length
-      if (title.length < 3) {
-        setError('Poll title must be at least 3 characters long');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      if (title.length > 200) {
-        setError('Poll title must be less than 200 characters');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Validate description length
-      if (description && description.length > 1000) {
-        setError('Poll description must be less than 1000 characters');
+      // Check rate limiting
+      if (!checkRateLimit()) {
         setIsSubmitting(false);
         return;
       }
 
-      // Validate and sanitize options
-      const sanitizedOptions = options
-        .map(opt => sanitizeInput(opt))
-        .filter(opt => opt !== '');
-        
-      if (sanitizedOptions.length < 2) {
-        setError('At least 2 poll options are required');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      if (sanitizedOptions.length > 10) {
-        setError('Maximum 10 poll options allowed');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Validate option lengths
-      for (let i = 0; i < sanitizedOptions.length; i++) {
-        if (sanitizedOptions[i].length < 1) {
-          setError(`Option ${i + 1} cannot be empty`);
-          setIsSubmitting(false);
-          return;
+      // Validate end date if provided
+      let endDate = null;
+      if (data.endDate) {
+        endDate = new Date(data.endDate);
+        if (endDate <= new Date()) {
+          throw new Error('End date must be in the future');
         }
-        if (sanitizedOptions[i].length > 100) {
-          setError(`Option ${i + 1} must be less than 100 characters`);
-          setIsSubmitting(false);
-          return;
-        }
-      }
-      
-      // Check for duplicate options
-      const uniqueOptions = new Set(sanitizedOptions.map(opt => opt.toLowerCase()));
-      if (uniqueOptions.size !== sanitizedOptions.length) {
-        setError('Poll options must be unique');
-        setIsSubmitting(false);
-        return;
       }
 
-      // Create new form data with sanitized inputs
-      const sanitizedFormData = new FormData();
-      
-      // Add sanitized title and description
-      sanitizedFormData.append('title', title);
-      if (description) {
-        sanitizedFormData.append('description', description);
-      }
-      
-      // Add other form fields (excluding title, description, and options)
-      for (const [key, value] of formData.entries()) {
-        if (!key.startsWith('option-') && key !== 'title' && key !== 'description') {
-          sanitizedFormData.append(key, value);
-        }
-      }
-      
-      // Add sanitized options to form data
-      sanitizedOptions.forEach((option, index) => {
-        sanitizedFormData.append(`option-${index}`, option);
-      });
-      
-      // Form data prepared for submission
+      const pollData = {
+        title: data.title,
+        description: data.description || null,
+        options: data.options,
+        allowMultipleSelections: data.allowMultipleSelections,
+        isPublic: data.isPublic,
+        endDate: endDate ? endDate.toISOString() : null
+      };
 
-      // Wrap the server action call in another try/catch to handle any potential errors
-      try {
-        // Call the server action with sanitized data - this will redirect on success
-        const result = await createPoll(sanitizedFormData);
-        
-        // Handle the ServerActionResponse
-        if (result.success) {
-          // Success - redirect will happen automatically from server action
-          return;
-        } else {
-          // Error returned from server action
-          setError(result.error);
-          setIsSubmitting(false);
-          return;
-        }
-      } catch (actionErr: unknown) {
-        // This is likely a redirect, which is good!
-        if (actionErr instanceof Error && actionErr.message === 'NEXT_REDIRECT') {
-          return; // Let the redirect happen naturally
-        }
-        
-        // Only set error for non-redirect errors
-        throw actionErr; // Re-throw to be caught by outer catch
-      }
-    } catch (err: unknown) {
-      // Don't show error for redirect
-      if (err instanceof Error && err.message === 'NEXT_REDIRECT') {
-        return; // Let the redirect happen naturally
-      }
+      const result = await createPoll(pollData);
       
-      // For all other errors
-      setError('Failed to create poll. Please try again.');
+      if (result.success && result.data) {
+        // Clear rate limiting data on successful creation
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('rate_limit_create_poll');
+        }
+        router.push(`/polls/${result.data.pollId}`);
+      } else {
+        throw new Error(result.error || 'Failed to create poll');
+      }
+    } catch (error: any) {
+      console.error('Poll creation error:', error);
+      setError(error.message || 'An error occurred while creating the poll');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -203,10 +139,12 @@ function NewPollPage() {
           </Button>
         </div>
         
-        {error && (
-          <div className="w-full p-4 mb-6 bg-red-50 border border-red-200 rounded-lg text-red-600">
-            {error}
-          </div>
+        {(error || rateLimitError) && (
+          <Alert className="w-full mb-6" variant="destructive">
+            <AlertDescription>
+              {error || rateLimitError}
+            </AlertDescription>
+          </Alert>
         )}
         
         <div className="flex w-full bg-blue-50 rounded-xl border border-blue-100 mb-6">
@@ -226,7 +164,7 @@ function NewPollPage() {
           </button>
         </div>
         
-        <form ref={formRef} action={handleSubmit} className="w-full">
+        <form ref={formRef} onSubmit={form.handleSubmit(handleSubmit)} className="w-full">
           {activeTab === 'basic' && (
             <Card className="max-w-2xl w-full mx-auto p-8 space-y-6 bg-white rounded-2xl border border-[#e5e7eb] shadow-md">
               <CardHeader className="text-black text-[20px] rounded-2xl pb-2">
@@ -239,7 +177,11 @@ function NewPollPage() {
                     <Label htmlFor="title" className="font-semibold">Poll Title <span className="text-red-500">*</span></Label>
                     <Input 
                       id="title" 
-                      name="title" 
+                      {...form.register('title')}
+                      onChange={(e) => {
+                        form.setValue('title', e.target.value);
+                        clearErrors();
+                      }}
                       placeholder="Enter a question or title" 
                       className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" 
                       required
@@ -247,56 +189,78 @@ function NewPollPage() {
                       maxLength={200}
                       disabled={isSubmitting}
                     />
+                    {form.formState.errors.title && (
+                      <p className="text-sm text-red-600 mt-1">{form.formState.errors.title.message}</p>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="description" className="font-semibold">Description (Optional)</Label>
                     <Textarea 
                       id="description" 
-                      name="description" 
+                      {...form.register('description')}
+                      onChange={(e) => {
+                        form.setValue('description', e.target.value);
+                        clearErrors();
+                      }}
                       placeholder="Provide more context about your poll" 
                       className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" 
                       maxLength={1000}
                       disabled={isSubmitting}
                       rows={3}
                     />
+                    {form.formState.errors.description && (
+                      <p className="text-sm text-red-600 mt-1">{form.formState.errors.description.message}</p>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label className="font-semibold">Poll Options <span className="text-red-500">*</span></Label>
                     <div className="space-y-2">
-                      {options.map((option, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            value={option}
-                            onChange={(e) => handleOptionChange(index, e.target.value)}
-                            placeholder={`Option ${index + 1}`}
-                            className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
-                            maxLength={100}
-                            disabled={isSubmitting}
-                            required={index < 2}
-                          />
-                          {options.length > 2 && (
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              className="px-3 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => removeOption(index)}
+                      {fields.map((field, index) => (
+                        <div key={field.id} className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              {...form.register(`options.${index}.text`)}
+                              onChange={(e) => {
+                                form.setValue(`options.${index}.text`, e.target.value);
+                                clearErrors();
+                              }}
+                              placeholder={`Option ${index + 1}`}
+                              className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
+                              maxLength={100}
                               disabled={isSubmitting}
-                            >
-                              ✕
-                            </Button>
+                              required={index < 2}
+                            />
+                            {fields.length > 2 && (
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                className="px-3 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => removeOption(index)}
+                                disabled={isSubmitting}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          {form.formState.errors.options?.[index]?.text && (
+                            <p className="text-sm text-red-600">{form.formState.errors.options[index]?.text?.message}</p>
                           )}
                         </div>
                       ))}
                     </div>
+                    {form.formState.errors.options && typeof form.formState.errors.options === 'object' && 'message' in form.formState.errors.options && (
+                      <p className="text-sm text-red-600">{form.formState.errors.options.message}</p>
+                    )}
                   </div>
                   <div className="flex justify-start">
                     <Button 
                       type="button" 
                       onClick={addOption} 
                       className="bg-[#f3f6fa] text-black border border-[#e5e7eb] rounded-lg font-semibold hover:bg-[#e5e7eb]"
-                      disabled={isSubmitting || options.length >= 10}
+                      disabled={isSubmitting || fields.length >= 10}
                     >
-                      {options.length >= 10 ? 'Maximum Options Reached' : 'Add Option'}
+                      <Plus className="mr-2 h-4 w-4" />
+                      {fields.length >= 10 ? 'Maximum Options Reached' : 'Add Option'}
                     </Button>
                   </div>
                 </div>
@@ -313,17 +277,45 @@ function NewPollPage() {
               <CardContent className="rounded-2xl">
                 <div className="flex flex-col gap-3 my-4">
                   <label className="flex items-center gap-2 text-black">
-                    <input type="checkbox" name="allowMultipleSelections" className="h-4 w-4" />
+                    <input 
+                      type="checkbox" 
+                      checked={form.watch('allowMultipleSelections')}
+                      onChange={(e) => {
+                        form.setValue('allowMultipleSelections', e.target.checked);
+                        clearErrors();
+                      }}
+                      className="h-4 w-4" 
+                    />
                     Allow multiple selections
                   </label>
                   <label className="flex items-center gap-2 text-black">
-                    <input type="checkbox" name="isPublic" className="h-4 w-4" />
+                    <input 
+                      type="checkbox" 
+                      checked={form.watch('isPublic')}
+                      onChange={(e) => {
+                        form.setValue('isPublic', e.target.checked);
+                        clearErrors();
+                      }}
+                      className="h-4 w-4" 
+                    />
                     Make poll results public
                   </label>
                 </div>
                 <div className="grid gap-2 text-black">
                   <Label htmlFor="endDate" className="font-semibold">Poll End Date (Optional)</Label>
-                  <Input id="endDate" name="endDate" type="date" className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" />
+                  <Input 
+                    id="endDate" 
+                    {...form.register('endDate')}
+                    onChange={(e) => {
+                      form.setValue('endDate', e.target.value || undefined);
+                      clearErrors();
+                    }}
+                    type="date" 
+                    className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" 
+                  />
+                  {form.formState.errors.endDate && (
+                    <p className="text-sm text-red-600 mt-1">{form.formState.errors.endDate.message}</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -333,9 +325,16 @@ function NewPollPage() {
             <Button
               type="submit"
               className="px-8 py-2 text-white bg-blue-700 rounded-lg font-semibold shadow hover:bg-blue-800"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !!rateLimitError}
             >
-              {isSubmitting ? 'Creating Poll...' : 'Create Poll'}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Poll...
+                </>
+              ) : (
+                'Create Poll'
+              )}
             </Button>
           </div>
         </form>
@@ -344,7 +343,15 @@ function NewPollPage() {
   );
 }
 
-export default withAuth(NewPollPage);
+const NewPollPageWithAuth = withAuth(NewPollPage);
+
+export default function NewPollPageWrapper() {
+  return (
+    <ErrorBoundary>
+      <NewPollPageWithAuth />
+    </ErrorBoundary>
+  );
+}
 
 
 

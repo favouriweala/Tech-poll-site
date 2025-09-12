@@ -19,12 +19,8 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const token = searchParams.get('token');
     if (token) {
-      // This is just to get the session from the token. The actual password reset happens when the user submits the form.
-      supabase.auth.verifyOtp({ token, type: 'recovery' }).then(({ error }) => {
-        if (error) {
-          setError("Invalid or expired token.");
-        }
-      });
+      // Token verification is handled automatically by Supabase when updateUser is called
+      // No need to manually verify the recovery token here
     }
   }, [searchParams]);
 

@@ -43,6 +43,7 @@ import { getUserPolls, getPublicPolls } from "@/lib/actions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import UserPollsList from "./UserPollsList";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 /**
  * Dashboard Component Implementation
@@ -179,5 +180,11 @@ async function Dashboard() {
   );
 }
 
-export default Dashboard;
+export default function DashboardWrapper() {
+  return (
+    <ErrorBoundary>
+      <Dashboard />
+    </ErrorBoundary>
+  );
+}
 

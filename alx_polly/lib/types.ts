@@ -67,7 +67,7 @@ export interface ApiError {
 // Error types for different operations
 export type AuthError = {
   message: string;
-  code?: 'INVALID_CREDENTIALS' | 'USER_NOT_FOUND' | 'EMAIL_NOT_CONFIRMED' | 'WEAK_PASSWORD' | 'EMAIL_ALREADY_EXISTS';
+  code?: 'INVALID_CREDENTIALS' | 'USER_NOT_FOUND' | 'EMAIL_NOT_CONFIRMED' | 'WEAK_PASSWORD' | 'EMAIL_ALREADY_EXISTS' | 'INVALID_EMAIL' | 'NETWORK_ERROR' | 'UNKNOWN_ERROR';
 };
 
 export type PollError = {
@@ -182,6 +182,49 @@ export type ServerActionResponse<T = unknown> = Promise<Result<T>>;
 export interface ProcessedFormData {
   [key: string]: string | string[] | File | File[];
 }
+
+// =====================================================
+// STATISTICS TYPES
+// =====================================================
+
+export interface PollStatistics {
+  totalPolls: number;
+  totalVotes: number;
+  averageVotesPerPoll: number;
+  mostPopularPoll?: {
+    id: string;
+    title: string;
+    voteCount: number;
+  };
+}
+
+// =====================================================
+// API RESPONSE TYPES
+// =====================================================
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  statusCode?: number;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export type ActionResult<T = any> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+};
 
 // =====================================================
 // UTILITY TYPES

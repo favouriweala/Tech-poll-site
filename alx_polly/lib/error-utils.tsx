@@ -1,6 +1,6 @@
 // Error handling utilities with proper TypeScript types
 
-import type { AuthError, PollError, VoteError, ApiError, Result } from './types';
+import type { AuthError, PollError, VoteError, ApiError, Result, ApiResponse } from './types';
 import type { AuthErrorCode } from './auth-types';
 
 // =====================================================
@@ -198,6 +198,67 @@ export function createErrorLogger(context: string) {
     const fullContext = additionalContext ? `${context}:${additionalContext}` : context;
     logError(error, fullContext);
   };
+}
+
+// =====================================================
+// API ERROR RESPONSES
+// =====================================================
+
+import { NextResponse } from 'next/server';
+
+export interface ErrorResponse {
+  error: string;
+  details?: string;
+  code?: string;
+}
+
+export function createErrorResponse(
+  message: string,
+  status: number = 500,
+  details?: string,
+  code?: string
+): NextResponse {
+  const errorResponse: ErrorResponse = {
+    error: message,
+    ...(details && { details }),
+    ...(code && { code })
+  };
+  
+  return NextResponse.json(errorResponse, { status });
+}
+
+export function createApiResponse<T = any>(
+  success: boolean,
+  data?: T,
+  error?: string,
+  message?: string,
+  statusCode: number = 200
+): NextResponse {
+  const response: ApiResponse<T> = {
+    success,
+    ...(data && { data }),
+    ...(error && { error }),
+    ...(message && { message }),
+    statusCode
+  };
+  
+  return NextResponse.json(response, { status: statusCode });
+}
+
+export function createSuccessResponse<T>(
+  data?: T,
+  message?: string,
+  statusCode: number = 200
+): NextResponse {
+  return createApiResponse(true, data, undefined, message, statusCode);
+}
+
+export function createErrorApiResponse(
+  error: string,
+  statusCode: number = 500,
+  message?: string
+): NextResponse {
+  return createApiResponse(false, undefined, error, message, statusCode);
 }
 
 // =====================================================

@@ -1,6 +1,6 @@
 // Authentication-specific type definitions
 
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, AuthError } from '@supabase/supabase-js';
 
 // =====================================================
 // AUTH CONTEXT TYPES
@@ -13,6 +13,14 @@ export interface AuthContextType {
   user: User | null;
   /** Loading state indicating if authentication status is being determined */
   loading: boolean;
+  /** Current authentication error if any */
+  error: AuthError | null;
+  /** Whether the auth context has been initialized */
+  initialized: boolean;
+  /** Sign out the current user */
+  signOut: () => Promise<boolean>;
+  /** Refresh the current session */
+  refreshSession: () => Promise<boolean>;
 }
 
 // =====================================================
@@ -77,8 +85,9 @@ export type AuthErrorCode =
   | 'NETWORK_ERROR'
   | 'UNKNOWN_ERROR';
 
-export interface AuthError {
-  message: string;
+// AuthError is now imported from @supabase/supabase-js
+// Custom auth error codes for application-specific errors
+export interface CustomAuthError extends AuthError {
   code: AuthErrorCode;
   details?: Record<string, unknown>;
 }

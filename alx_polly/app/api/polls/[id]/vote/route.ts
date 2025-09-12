@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     let voterIp = null
     if (!userId) {
-      voterIp = request.ip || '127.0.0.1'
+      voterIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1'
     }
 
     const { data: poll } = await supabase

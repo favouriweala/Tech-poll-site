@@ -2,6 +2,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
+import { PollCreationSchema } from '@/lib/validation-utils'
+import { ApiResponse } from '@/lib/types'
+import { z } from 'zod'
 
 // GET /api/polls - Retrieves public polls or user-specific polls
 export async function GET(request: NextRequest) {
@@ -42,18 +45,21 @@ export async function POST(request: NextRequest) {
     const { title, description, options, allowMultipleSelections, isPublic, endDate } = body
 
     if (!title || title.trim().length === 0) {
-      return NextResponse.json({ error: 'Poll title is required' }, { status: 400 })
+      const response: ApiResponse = { success: false, error: 'Poll title is required', statusCode: 400 };
+      return NextResponse.json(response, { status: 400 });
     }
 
     if (!options || !Array.isArray(options) || options.length < 2) {
-      return NextResponse.json({ error: 'At least 2 poll options are required' }, { status: 400 })
+      const response: ApiResponse = { success: false, error: 'At least 2 poll options are required', statusCode: 400 };
+      return NextResponse.json(response, { status: 400 });
     }
 
     const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'You must be logged in to create a poll' }, { status: 401 })
+      const response: ApiResponse = { success: false, error: 'You must be logged in to create a poll', statusCode: 401 };
+      return NextResponse.json(response, { status: 401 });
     }
 
     const { error: profileError } = await supabase
@@ -84,8 +90,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (pollError) {
-      console.error('Error creating poll:', pollError)
-      return NextResponse.json({ error: 'Failed to create poll' }, { status: 500 })
+      console.error('Error creating poll:', pollError);
+      const response: ApiResponse = { success: false, error: 'Failed to create poll', statusCode: 500 };
+      return NextResponse.json(response, { status: 500 });
     }
 
     const optionsToInsert = options.map((text: string, index: number) => ({
@@ -99,16 +106,19 @@ export async function POST(request: NextRequest) {
       .insert(optionsToInsert)
 
     if (optionsError) {
-      console.error('Error creating poll options:', optionsError)
-      await supabase.from('polls').delete().eq('id', poll.id)
-      return NextResponse.json({ error: 'Failed to create poll options' }, { status: 500 })
+      console.error('Error creating poll options:', optionsError);
+      await supabase.from('polls').delete().eq('id', poll.id);
+      const response: ApiResponse = { success: false, error: 'Failed to create poll options', statusCode: 500 };
+      return NextResponse.json(response, { status: 500 });
     }
 
-    revalidatePath('/polls')
-    return NextResponse.json({ success: true, pollId: poll.id }, { status: 201 })
+    revalidatePath('/polls');
+    const response: ApiResponse<{ pollId: string }> = { success: true, data: { pollId: poll.id }, statusCode: 201 };
+    return NextResponse.json(response, { status: 201 });
 
   } catch (error) {
-    console.error('Error in POST /api/polls:', error)
-    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 })
+    console.error('Error in POST /api/polls:', error);
+    const response: ApiResponse = { success: false, error: 'An unexpected error occurred', statusCode: 500 };
+    return NextResponse.json(response, { status: 500 });
   }
 }
