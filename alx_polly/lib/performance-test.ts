@@ -2,6 +2,15 @@
 import { PollOption } from './types';
 import { createOptimizedVoteProcessor, VoteStatsCalculator, VoteLookup } from './vote-utils';
 
+// Performance logging utility - only logs in development or when explicitly enabled
+const ENABLE_PERFORMANCE_LOGS = process.env.NODE_ENV === 'development' || process.env.ENABLE_PERFORMANCE_LOGS === 'true';
+
+function performanceLog(...args: any[]) {
+  if (ENABLE_PERFORMANCE_LOGS) {
+    console.log(...args);
+  }
+}
+
 // Generate test data for performance testing
 export function generateTestPollData(optionCount: number, voteCount: number): PollOption[] {
   const options: PollOption[] = [];
@@ -79,11 +88,11 @@ export function runPerformanceBenchmark() {
     { options: 500, votes: 50000 },
   ];
   
-  console.log('🚀 Vote Tallying Performance Benchmark');
-  console.log('=====================================');
+  performanceLog('🚀 Vote Tallying Performance Benchmark');
+  performanceLog('=====================================');
   
   testCases.forEach(({ options: optionCount, votes: voteCount }) => {
-    console.log(`\n📊 Test Case: ${optionCount} options, ${voteCount} votes`);
+    performanceLog(`\n📊 Test Case: ${optionCount} options, ${voteCount} votes`);
     
     // Generate test data
     const testData = generateTestPollData(optionCount, voteCount);
@@ -108,20 +117,20 @@ export function runPerformanceBenchmark() {
     const improvement = ((avgOriginal - avgOptimized) / avgOriginal * 100).toFixed(1);
     const speedup = (avgOriginal / avgOptimized).toFixed(1);
     
-    console.log(`   Original:  ${avgOriginal.toFixed(2)}ms`);
-    console.log(`   Optimized: ${avgOptimized.toFixed(2)}ms`);
-    console.log(`   🎯 Improvement: ${improvement}% faster (${speedup}x speedup)`);
+    performanceLog(`   Original:  ${avgOriginal.toFixed(2)}ms`);
+    performanceLog(`   Optimized: ${avgOptimized.toFixed(2)}ms`);
+    performanceLog(`   🎯 Improvement: ${improvement}% faster (${speedup}x speedup)`);
   });
   
-  console.log('\n✅ Benchmark Complete');
+  performanceLog('\n✅ Benchmark Complete');
 }
 
 // Memory usage test
 export function testMemoryUsage() {
   const testData = generateTestPollData(1000, 100000);
   
-  console.log('🧠 Memory Usage Comparison');
-  console.log('==========================');
+  performanceLog('🧠 Memory Usage Comparison');
+  performanceLog('==========================');
   
   // Test original approach memory usage
   const beforeOriginal = (performance as any).memory?.usedJSHeapSize || 0;
@@ -138,12 +147,12 @@ export function testMemoryUsage() {
   const afterOptimized = (performance as any).memory?.usedJSHeapSize || 0;
   const optimizedMemory = afterOptimized - beforeOptimized;
   
-  console.log(`Original Memory Usage:  ${(originalMemory / 1024 / 1024).toFixed(2)}MB`);
-  console.log(`Optimized Memory Usage: ${(optimizedMemory / 1024 / 1024).toFixed(2)}MB`);
+  performanceLog(`Original Memory Usage:  ${(originalMemory / 1024 / 1024).toFixed(2)}MB`);
+  performanceLog(`Optimized Memory Usage: ${(optimizedMemory / 1024 / 1024).toFixed(2)}MB`);
   
   if (originalMemory > 0) {
     const memoryImprovement = ((originalMemory - optimizedMemory) / originalMemory * 100).toFixed(1);
-    console.log(`🎯 Memory Improvement: ${memoryImprovement}%`);
+    performanceLog(`🎯 Memory Improvement: ${memoryImprovement}%`);
   }
 }
 
@@ -152,7 +161,7 @@ export function testLookupPerformance() {
   const testData = generateTestPollData(1000, 10000);
   const lookup = new VoteLookup(testData);
   
-  console.log('🔍 Lookup Performance Test');
+  performanceLog('🔍 Lookup Performance Test');
   console.log('==========================');
   
   const lookupCount = 10000;
@@ -178,16 +187,16 @@ export function testLookupPerformance() {
   const mapTime = endMap - startMap;
   const improvement = ((arrayTime - mapTime) / arrayTime * 100).toFixed(1);
   
-  console.log(`Array Lookup (O(n)):  ${arrayTime.toFixed(2)}ms`);
-  console.log(`Map Lookup (O(1)):    ${mapTime.toFixed(2)}ms`);
-  console.log(`🎯 Lookup Improvement: ${improvement}% faster`);
+  performanceLog(`Array Lookup (O(n)):  ${arrayTime.toFixed(2)}ms`);
+  performanceLog(`Map Lookup (O(1)):    ${mapTime.toFixed(2)}ms`);
+  performanceLog(`🎯 Lookup Improvement: ${improvement}% faster`);
 }
 
 // Run all performance tests
 export function runAllPerformanceTests() {
   runPerformanceBenchmark();
-  console.log('\n');
+  performanceLog('\n');
   testMemoryUsage();
-  console.log('\n');
+  performanceLog('\n');
   testLookupPerformance();
 }

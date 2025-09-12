@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { PollOption } from '@/lib/types';
+import { PollOption, UseVoteStatsReturn } from '@/lib/types';
 import { VoteStatsManager } from '@/lib/vote-cache';
 import { createOptimizedVoteProcessor, VoteStatistics } from '@/lib/vote-utils';
 
@@ -13,11 +13,9 @@ interface UseVoteStatsOptions {
   refreshInterval?: number;
 }
 
-interface UseVoteStatsReturn {
+// Extend the base return type with additional utility functions
+interface ExtendedUseVoteStatsReturn extends UseVoteStatsReturn {
   stats: VoteStatistics;
-  isLoading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
   getVoteCount: (optionId: string) => number;
   getPercentage: (optionId: string) => number;
   isWinning: (optionId: string) => boolean;
@@ -29,7 +27,7 @@ export function useVoteStats({
   options,
   enableCaching = true,
   refreshInterval = 30000, // 30 seconds
-}: UseVoteStatsOptions): UseVoteStatsReturn {
+}: UseVoteStatsOptions): ExtendedUseVoteStatsReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheKey, setCacheKey] = useState(0);

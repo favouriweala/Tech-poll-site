@@ -121,7 +121,12 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
       try {
         // Submit votes for all selected options
         for (const optionId of selectedOptions) {
-          await submitVote(poll.id, optionId, userId);
+          const result = await submitVote(poll.id, optionId, userId);
+          
+          if (!result.success) {
+            setError(result.error);
+            return;
+          }
         }
         // Page will be revalidated and show results
       } catch (err) {

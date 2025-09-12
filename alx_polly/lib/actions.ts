@@ -1,40 +1,42 @@
 'use server'
 
 /**
- * Server Actions for ALX Polly Poll Management System
+ * Server Actions for Poll Management
  * 
- * WHAT: This module contains all server-side actions for managing polls, votes, and related
- * operations in the ALX Polly application. All functions run on the server using Next.js
- * Server Actions and utilize Supabase for database operations.
- * 
- * WHY: Server Actions are used instead of API routes because:
- * 1. Better security - no exposed API endpoints that can be called directly
- * 2. Type safety - direct function calls with TypeScript support
- * 3. Simplified data fetching - no need for fetch() calls or error handling
- * 4. Better performance - direct server execution without HTTP overhead
- * 5. Built-in CSRF protection and form handling
- * 
- * HOW: Uses Next.js 'use server' directive to mark functions as server actions:
- * - Functions execute on the server with full database access
- * - Authentication is verified using Supabase server client
- * - Database operations use Row Level Security (RLS) for additional protection
- * - Form data is processed and validated before database operations
- * - Optimistic updates are supported through revalidatePath() calls
+ * This file contains all server-side actions for managing polls in the application.
+ * These actions handle database operations, authentication, and data validation.
  * 
  * Key Features:
- * - Full CRUD operations for polls and poll options
- * - Vote submission with duplicate prevention
- * - User authentication verification
- * - Database transaction safety with rollback capabilities
- * - Performance-optimized queries using database views
- * - Row Level Security (RLS) enforcement
+ * - Poll creation with multiple options
+ * - Vote submission and tracking
+ * - Poll retrieval with filtering
+ * - User vote history
+ * - Poll deletion
  * 
- * @module actions
+ * Security Features:
+ * - User authentication verification
+ * - Input validation and sanitization
+ * - SQL injection prevention through Supabase client
+ * - User authorization checks
+ * 
+ * Performance Optimizations:
+ * - Efficient database queries with proper indexing
+ * - Batch operations for poll options
+ * - Selective data fetching
+ * - Cache revalidation
+ * 
+ * Error Handling:
+ * - Comprehensive try-catch blocks
+ * - Detailed error logging
+ * - User-friendly error messages
+ * - Database rollback on failures
  */
 
 import { createServerSupabaseClient } from './supabase-server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import type { ServerActionResponse, ProcessedFormData } from './types'
+import { mapPollError, mapVoteError, logError, isNextRedirect } from './error-utils'
 
 /** Represents a single poll option with its text content */
 export interface PollOption {
@@ -98,14 +100,15 @@ export interface PollData {
  * </form>
  * ```
  */
-export async function createPoll(formData: FormData) {
-  const title = formData.get('title') as string
-  const description = formData.get('description') as string
-  
-  // Validate required fields
-  if (!title || title.trim().length === 0) {
-    throw new Error('Poll title is required')
-  }
+export async function createPoll(formData: FormData): Promise<ServerActionResponse<{ pollId: string }>> {
+  try {
+    const title = formData.get('title') as string
+    const description = formData.get('description') as string
+    
+    // Validate required fields
+    if (!title || title.trim().length === 0) {
+      throw new Error('Poll title is required')
+    }
   
   // Get all options from the form data
   const options = []
@@ -203,11 +206,17 @@ export async function createPoll(formData: FormData) {
     redirect('/polls?success=true')
     
   } catch (error) {
-    console.error('Error in createPoll:', error)
-    if (error instanceof Error) {
-      throw error
+    // Handle Next.js redirects (these are not actual errors)
+    if (isNextRedirect(error)) {
+      throw error;
     }
-    throw new Error('An unexpected error occurred while creating the poll')
+    
+    logError(error, 'createPoll');
+    const pollError = mapPollError(error);
+    return {
+      success: false,
+      error: pollError.message
+    };
   }
 }
 
@@ -417,7 +426,7 @@ export async function getPollWithResults(pollId: string) {
  * await submitVote(pollId, optionId)
  * ```
  */
-export async function submitVote(pollId: string, optionId: string, userId?: string) {
+export async function submitVote(pollId: string, optionId: string, userId?: string): Promise<ServerActionResponse<{ success: true }>> {
   try {
     const supabase = await createServerSupabaseClient()
     
@@ -475,13 +484,14 @@ export async function submitVote(pollId: string, optionId: string, userId?: stri
     }
 
     revalidatePath(`/polls/${pollId}`)
-    return { success: true }
+    return { success: true, data: { success: true } }
   } catch (error) {
-    console.error('Error in submitVote:', error)
-    if (error instanceof Error) {
-      throw error
-    }
-    throw new Error('An unexpected error occurred while submitting your vote')
+    logError(error, 'submitVote');
+    const voteError = mapVoteError(error);
+    return {
+      success: false,
+      error: voteError.message
+    };
   }
 }
 
@@ -600,7 +610,7 @@ export async function getUserVotes(pollId: string, userId?: string) {
  * }
  * ```
  */
-export async function deletePoll(pollId: string) {
+export async function deletePoll(pollId: string): Promise<ServerActionResponse<{ success: true }>> {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -636,12 +646,13 @@ export async function deletePoll(pollId: string) {
     }
 
     revalidatePath('/polls')
-    return { success: true }
+    return { success: true, data: { success: true } }
   } catch (error) {
-    console.error('Error in deletePoll:', error)
-    if (error instanceof Error) {
-      throw error
-    }
-    throw new Error('An unexpected error occurred while deleting the poll')
+    logError(error, 'deletePoll');
+    const pollError = mapPollError(error);
+    return {
+      success: false,
+      error: pollError.message
+    };
   }
 }

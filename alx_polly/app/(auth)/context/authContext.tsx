@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase-client'
 import { Session, User } from '@supabase/supabase-js'
+import type { AuthContextType } from '@/lib/auth-types'
 
 /**
  * Authentication Context for ALX Polly Application
@@ -37,15 +38,6 @@ import { Session, User } from '@supabase/supabase-js'
  * if (!user) return <LoginPrompt />
  * ```
  */
-
-interface AuthContextType {
-  /** Current Supabase session object containing tokens and session metadata */
-  session: Session | null
-  /** Current authenticated user object with user data and metadata */
-  user: User | null
-  /** Loading state indicating if authentication status is being determined */
-  loading: boolean
-}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
@@ -112,8 +104,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       authListener.subscription.unsubscribe()
     }
   }, [])
-
-  console.log("Current user from AuthContext:", user);
 
   return (
     <AuthContext.Provider value={{ session, user, loading }}>

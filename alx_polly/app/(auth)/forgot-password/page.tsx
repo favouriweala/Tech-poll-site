@@ -6,26 +6,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { InlineSpinner } from "@/components/ui/loading-spinner";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import Link from 'next/link';
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordPageContent() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMessage('');
     setError('');
+    setIsLoading(true);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setMessage('Password reset email sent. Please check your inbox.');
+      if (error) {
+        setError(error.message);
+      } else {
+        setMessage('Password reset email sent. Please check your inbox.');
+      }
+    } catch (err) {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -41,7 +51,16 @@ export default function ForgotPasswordPage() {
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <Button type="submit" className="w-full">Send Reset Link</Button>
+          <Button type="submit" className="w-full" disabled={isLoading || !email.trim()}>
+            {isLoading ? (
+              <>
+                <InlineSpinner className="mr-2" />
+                Sending...
+              </>
+            ) : (
+              'Send Reset Link'
+            )}
+          </Button>
         </form>
         {message && <p className="mt-4 text-sm text-green-500">{message}</p>}
         {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
@@ -50,5 +69,13 @@ export default function ForgotPasswordPage() {
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <ErrorBoundary>
+      <ForgotPasswordPageContent />
+    </ErrorBoundary>
   );
 }

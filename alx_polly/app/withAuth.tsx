@@ -3,8 +3,13 @@
 import { useAuth } from '@/app/(auth)/context/authContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { PageLoading } from '@/components/ui/loading-spinner';
+import type { WithAuthProps } from '@/lib/auth-types';
 
-const withAuth = <P extends object>(WrappedComponent: React.ComponentType<P>) => {
+// Higher-order component that ensures user authentication
+const withAuth = <P extends object>(
+  WrappedComponent: React.ComponentType<P & WithAuthProps>
+) => {
   const WithAuthComponent = (props: P) => {
     const { session, user, loading } = useAuth();
     const router = useRouter();
@@ -14,10 +19,8 @@ const withAuth = <P extends object>(WrappedComponent: React.ComponentType<P>) =>
       // Only redirect if we've confirmed the user is not logged in
       if (!loading) {
         if (!session) {
-          console.log("No session found, redirecting to login");
           router.replace('/login');
         } else {
-          console.log("Session found:", session.user.email);
           setAuthChecked(true);
         }
       }
@@ -25,9 +28,7 @@ const withAuth = <P extends object>(WrappedComponent: React.ComponentType<P>) =>
 
     // Show loading state while checking auth
     if (loading) {
-      return <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>;
+      return <PageLoading text="Authenticating..." />;
     }
 
     // Don't render anything until we've confirmed auth status
@@ -35,8 +36,13 @@ const withAuth = <P extends object>(WrappedComponent: React.ComponentType<P>) =>
       return null;
     }
 
-    // If we have a session, render the component
-    return <WrappedComponent {...props} />;
+    // If we have a session, render the component with auth props
+    if (session && user) {
+      return <WrappedComponent {...props} user={user} session={session} />;
+    }
+    
+    // Fallback - should not reach here due to auth checks above
+    return null;
   };
 
   return WithAuthComponent;

@@ -399,7 +399,7 @@ pnpm test:all
 - **Database Schema**: `supabase-schema.sql`
 - **Environment Config**: `.env.local`
 - **Main Actions**: `lib/actions.ts`
-- **Auth Context**: `app/(auth)/context/authContext.tsx`
+- **Auth Context**: `app/(auth)/context/f,`
 - **Performance Utils**: `lib/vote-utils.ts`
 
 ### Environment Variables
