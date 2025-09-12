@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from './supabase-server'
 
 export async function debugAuth() {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     
     // Get user session
     const { data: { user }, error: userError } = await supabase.auth.getUser()

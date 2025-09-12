@@ -31,7 +31,9 @@ function ProfilePage() {
           </div>
           <div className="mt-6 text-3xl font-extrabold text-black">{fullName}</div>
           <div className="text-gray-500 text-lg mt-2">{email}</div>
-          <button className="mt-4 px-6 py-2 border border-blue-200 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold transition text-base">Edit profile</button>
+          <Link href="/profile/edit" className="mt-4 px-6 py-2 border border-blue-200 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold transition text-base inline-block text-center">
+            Edit profile
+          </Link>
         </div>
       </div>
     </div>

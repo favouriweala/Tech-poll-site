@@ -1,3 +1,40 @@
+/**
+ * Dashboard Page Component
+ * 
+ * WHAT: Main dashboard interface for authenticated users providing a comprehensive overview
+ * of their polling activity, statistics, and poll management capabilities.
+ * 
+ * WHY: A centralized dashboard is necessary because:
+ * 1. Users need a single place to view all their polling activity
+ * 2. Statistics provide valuable insights into poll performance and engagement
+ * 3. Quick access to poll management reduces friction for content creators
+ * 4. Visual statistics motivate continued engagement with the platform
+ * 5. Empty states guide new users toward creating their first poll
+ * 
+ * HOW: Server-side rendering with parallel data fetching:
+ * - Authentication verification prevents unauthorized access
+ * - Parallel Promise.all() fetches user polls and public polls simultaneously
+ * - Statistics are calculated from aggregated poll data
+ * - Responsive grid layout adapts to different screen sizes
+ * - UserPollsList component handles complex poll management features
+ * 
+ * Features:
+ * - User authentication verification
+ * - Statistics overview (polls created, votes received, etc.)
+ * - Poll management interface with edit/delete capabilities
+ * - Quick poll creation access
+ * - Responsive design with gradient statistics cards
+ * - Empty state handling for new users
+ * 
+ * Data Sources:
+ * - User's created polls with statistics
+ * - Public polls count for context
+ * - Real-time vote counts and poll status
+ * 
+ * @component
+ * @returns Dashboard interface for authenticated users
+ */
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "../../components/ui/separator";
@@ -6,7 +43,14 @@ import { getUserPolls, getPublicPolls } from "@/lib/actions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import UserPollsList from "./UserPollsList";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
+/**
+ * Dashboard Component Implementation
+ * 
+ * Server component that fetches user data and renders the dashboard interface.
+ * Handles authentication verification and data aggregation for statistics display.
+ */
 async function Dashboard() {
   // Get current user
   const supabase = await createServerSupabaseClient();
@@ -136,5 +180,11 @@ async function Dashboard() {
   );
 }
 
-export default Dashboard;
+export default function DashboardWrapper() {
+  return (
+    <ErrorBoundary>
+      <Dashboard />
+    </ErrorBoundary>
+  );
+}
 

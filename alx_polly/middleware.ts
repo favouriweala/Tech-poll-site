@@ -1,6 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/**
+ * Enhanced Middleware with Security and Authentication
+ * 
+ * WHAT: Handles authentication, route protection, and security headers
+ * WHY: Ensures proper access control and security across the application
+ * HOW: Validates user sessions and redirects based on authentication state
+ */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -35,8 +42,32 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Optional: Add any auth-based redirects here
-  // For example, redirect to login if accessing protected routes
+  const url = request.nextUrl.clone()
+  const pathname = url.pathname
+
+  // Define protected and auth routes
+  const protectedRoutes = ['/dashboard', '/polls/new', '/profile']
+  const authRoutes = ['/login', '/register', '/forgot-password', '/reset-password']
+  
+  // Check if current path is protected
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
+
+  // Redirect unauthenticated users from protected routes
+  if (isProtectedRoute && !user) {
+    url.pathname = '/login'
+    url.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect authenticated users from auth pages to dashboard
+  if (isAuthRoute && user) {
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Add security headers to response
+  supabaseResponse.headers.set('X-Robots-Tag', 'noindex, nofollow')
   
   return supabaseResponse
 }

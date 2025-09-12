@@ -5,77 +5,124 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { useState, useTransition } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useForm, useFieldArray, type SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import withAuth from "@/app/withAuth";
 import { createPoll } from "@/lib/actions";
+import { PollCreationSchema, validateRateLimit } from '@/lib/validation-utils';
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
+type PollFormData = z.infer<typeof PollCreationSchema>;
 
 function NewPollPage() {
   const [activeTab, setActiveTab] = useState<'basic' | 'settings'>('basic');
-  const [options, setOptions] = useState<string[]>(['', '']);
-  const [title, setTitle] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
+  const form = useForm({
+    resolver: zodResolver(PollCreationSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      options: [{ text: '' }, { text: '' }],
+      allowMultipleSelections: false,
+      isPublic: true,
+      endDate: undefined
+    }
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: 'options'
+  });
+
   const addOption = () => {
-    if (options.length < 10) {
-      setOptions([...options, '']);
+    if (fields.length < 10) {
+      append({ text: '' });
     }
   };
 
   const removeOption = (index: number) => {
-    if (options.length > 2) {
-      setOptions(options.filter((_, i) => i !== index));
+    if (fields.length > 2) {
+      remove(index);
     }
   };
 
-  const updateOption = (index: number, value: string) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
+  // Rate limiting check
+  const checkRateLimit = (): boolean => {
+    const rateLimit = validateRateLimit('create_poll', 5, 300000); // 5 polls per 5 minutes
+    if (!rateLimit.allowed) {
+      const resetTime = new Date(rateLimit.resetTime).toLocaleTimeString();
+      setRateLimitError(`Too many poll creation attempts. Please try again after ${resetTime}.`);
+      return false;
+    }
+    setRateLimitError(null);
+    return true;
   };
 
-  const handleSubmit = async (formData: FormData) => {
-    setError('');
-    
-    // Validate client-side before submission
-    const validOptions = options.filter(option => option.trim().length > 0);
-    
-    if (!title.trim()) {
-      setError('Poll title is required');
-      return;
-    }
-    
-    if (validOptions.length < 2) {
-      setError('At least 2 poll options are required');
-      return;
-    }
-    
-    // Add title and description to form data
-    formData.set('title', title.trim());
-    formData.set('description', description.trim());
-    
-    // Add options to form data
-    validOptions.forEach((option, index) => {
-      formData.append(`option-${index}`, option.trim());
-    });
+  // Clear errors when user starts typing
+  const clearErrors = () => {
+    if (error) setError(null);
+    if (rateLimitError) setRateLimitError(null);
+  };
 
-    startTransition(async () => {
-      try {
-        await createPoll(formData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred while creating the poll');
+
+
+  const handleSubmit = async (data: any) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Check rate limiting
+      if (!checkRateLimit()) {
+        setIsSubmitting(false);
+        return;
       }
-    });
-  };
 
-  const isBasicTabValid = () => {
-    const validOptions = options.filter(option => option.trim().length > 0);
-    return title.trim().length > 0 && validOptions.length >= 2;
+      // Validate end date if provided
+      let endDate = null;
+      if (data.endDate) {
+        endDate = new Date(data.endDate);
+        if (endDate <= new Date()) {
+          throw new Error('End date must be in the future');
+        }
+      }
+
+      const pollData = {
+        title: data.title,
+        description: data.description || null,
+        options: data.options,
+        allowMultipleSelections: data.allowMultipleSelections,
+        isPublic: data.isPublic,
+        endDate: endDate ? endDate.toISOString() : null
+      };
+
+      const result = await createPoll(pollData);
+      
+      if (result.success && result.data) {
+        // Clear rate limiting data on successful creation
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('rate_limit_create_poll');
+        }
+        router.push(`/polls/${result.data.pollId}`);
+      } else {
+        throw new Error(result.error || 'Failed to create poll');
+      }
+    } catch (error: any) {
+      console.error('Poll creation error:', error);
+      setError(error.message || 'An error occurred while creating the poll');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -87,38 +134,37 @@ function NewPollPage() {
             type="button"
             className="px-6 py-2 bg-gray-100 border border-gray-300 text-black rounded-lg font-semibold shadow hover:bg-gray-200"
             onClick={() => router.push("/polls")}
-            disabled={isPending}
           >
             Cancel
           </Button>
         </div>
-
-        {error && (
-          <div className="w-full mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
+        
+        {(error || rateLimitError) && (
+          <Alert className="w-full mb-6" variant="destructive">
+            <AlertDescription>
+              {error || rateLimitError}
+            </AlertDescription>
+          </Alert>
         )}
-
-        <form action={handleSubmit} className="w-full max-w-2xl">
-          <div className="flex w-full bg-blue-50 rounded-xl border border-blue-100 mb-6">
-            <button
-              type="button"
-              className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-150 ${activeTab === 'basic' ? 'bg-white text-blue-900 shadow' : 'bg-transparent text-gray-500'}`}
-              onClick={() => setActiveTab('basic')}
-              disabled={isPending}
-            >
-              Basic Info
-            </button>
-            <button
-              type="button"
-              className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-150 ${activeTab === 'settings' ? 'bg-white text-blue-900 shadow' : 'bg-transparent text-gray-500'}`}
-              onClick={() => setActiveTab('settings')}
-              disabled={isPending}
-            >
-              Settings
-            </button>
-          </div>
-
+        
+        <div className="flex w-full bg-blue-50 rounded-xl border border-blue-100 mb-6">
+          <button
+            className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-150 ${activeTab === 'basic' ? 'bg-white text-blue-900 shadow' : 'bg-transparent text-gray-500'}`}
+            onClick={() => setActiveTab('basic')}
+            type="button"
+          >
+            Basic Info
+          </button>
+          <button
+            className={`flex-1 py-3 rounded-xl font-semibold transition-all duration-150 ${activeTab === 'settings' ? 'bg-white text-blue-900 shadow' : 'bg-transparent text-gray-500'}`}
+            onClick={() => setActiveTab('settings')}
+            type="button"
+          >
+            Settings
+          </button>
+        </div>
+        
+        <form ref={formRef} onSubmit={form.handleSubmit(handleSubmit)} className="w-full">
           {activeTab === 'basic' && (
             <Card className="max-w-2xl w-full mx-auto p-8 space-y-6 bg-white rounded-2xl border border-[#e5e7eb] shadow-md">
               <CardHeader className="text-black text-[20px] rounded-2xl pb-2">
@@ -128,70 +174,100 @@ function NewPollPage() {
               <CardContent className="rounded-2xl">
                 <div className="grid gap-4 text-black">
                   <div className="grid gap-2">
-                    <Label htmlFor="title" className="font-semibold">Poll Title *</Label>
+                    <Label htmlFor="title" className="font-semibold">Poll Title <span className="text-red-500">*</span></Label>
                     <Input 
                       id="title" 
-                      name="title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
+                      {...form.register('title')}
+                      onChange={(e) => {
+                        form.setValue('title', e.target.value);
+                        clearErrors();
+                      }}
                       placeholder="Enter a question or title" 
                       className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" 
                       required
-                      disabled={isPending}
+                      minLength={3}
+                      maxLength={200}
+                      disabled={isSubmitting}
                     />
+                    {form.formState.errors.title && (
+                      <p className="text-sm text-red-600 mt-1">{form.formState.errors.title.message}</p>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="description" className="font-semibold">Description (Optional)</Label>
                     <Textarea 
                       id="description" 
-                      name="description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      {...form.register('description')}
+                      onChange={(e) => {
+                        form.setValue('description', e.target.value);
+                        clearErrors();
+                      }}
                       placeholder="Provide more context about your poll" 
-                      className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
-                      disabled={isPending}
+                      className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" 
+                      maxLength={1000}
+                      disabled={isSubmitting}
+                      rows={3}
                     />
+                    {form.formState.errors.description && (
+                      <p className="text-sm text-red-600 mt-1">{form.formState.errors.description.message}</p>
+                    )}
                   </div>
                   <div className="grid gap-2">
-                    <Label className="font-semibold">Poll Options *</Label>
-                    {options.map((option, index) => (
-                      <div key={index} className="flex gap-2">
-                        <Input 
-                          placeholder={`Option ${index + 1}`} 
-                          value={option}
-                          onChange={(e) => updateOption(index, e.target.value)}
-                          className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
-                          disabled={isPending}
-                        />
-                        {options.length > 2 && (
-                          <Button
-                            type="button"
-                            onClick={() => removeOption(index)}
-                            className="px-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100"
-                            disabled={isPending}
-                          >
-                            ×
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    <div className="flex justify-start">
-                      <Button 
-                        type="button"
-                        onClick={addOption}
-                        disabled={options.length >= 10 || isPending}
-                        className="bg-[#f3f6fa] text-black border border-[#e5e7eb] rounded-lg font-semibold hover:bg-[#e5e7eb]"
-                      >
-                        Add Option
-                      </Button>
+                    <Label className="font-semibold">Poll Options <span className="text-red-500">*</span></Label>
+                    <div className="space-y-2">
+                      {fields.map((field, index) => (
+                        <div key={field.id} className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              {...form.register(`options.${index}.text`)}
+                              onChange={(e) => {
+                                form.setValue(`options.${index}.text`, e.target.value);
+                                clearErrors();
+                              }}
+                              placeholder={`Option ${index + 1}`}
+                              className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
+                              maxLength={100}
+                              disabled={isSubmitting}
+                              required={index < 2}
+                            />
+                            {fields.length > 2 && (
+                              <Button 
+                                type="button" 
+                                variant="outline" 
+                                className="px-3 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => removeOption(index)}
+                                disabled={isSubmitting}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          {form.formState.errors.options?.[index]?.text && (
+                            <p className="text-sm text-red-600">{form.formState.errors.options[index]?.text?.message}</p>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-xs text-gray-500">At least 2 options required. Maximum 10 options.</p>
+                    {form.formState.errors.options && typeof form.formState.errors.options === 'object' && 'message' in form.formState.errors.options && (
+                      <p className="text-sm text-red-600">{form.formState.errors.options.message}</p>
+                    )}
+                  </div>
+                  <div className="flex justify-start">
+                    <Button 
+                      type="button" 
+                      onClick={addOption} 
+                      className="bg-[#f3f6fa] text-black border border-[#e5e7eb] rounded-lg font-semibold hover:bg-[#e5e7eb]"
+                      disabled={isSubmitting || fields.length >= 10}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      {fields.length >= 10 ? 'Maximum Options Reached' : 'Add Option'}
+                    </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
-
+          
           {activeTab === 'settings' && (
             <Card className="max-w-2xl w-full mx-auto p-8 space-y-6 bg-white rounded-2xl border border-[#e5e7eb] shadow-md">
               <CardHeader className="text-black text-[20px] rounded-2xl pb-2">
@@ -203,19 +279,24 @@ function NewPollPage() {
                   <label className="flex items-center gap-2 text-black">
                     <input 
                       type="checkbox" 
-                      name="allowMultipleSelections"
+                      checked={form.watch('allowMultipleSelections')}
+                      onChange={(e) => {
+                        form.setValue('allowMultipleSelections', e.target.checked);
+                        clearErrors();
+                      }}
                       className="h-4 w-4" 
-                      disabled={isPending}
                     />
                     Allow multiple selections
                   </label>
                   <label className="flex items-center gap-2 text-black">
                     <input 
                       type="checkbox" 
-                      name="isPublic"
+                      checked={form.watch('isPublic')}
+                      onChange={(e) => {
+                        form.setValue('isPublic', e.target.checked);
+                        clearErrors();
+                      }}
                       className="h-4 w-4" 
-                      defaultChecked
-                      disabled={isPending}
                     />
                     Make poll results public
                   </label>
@@ -224,49 +305,37 @@ function NewPollPage() {
                   <Label htmlFor="endDate" className="font-semibold">Poll End Date (Optional)</Label>
                   <Input 
                     id="endDate" 
-                    name="endDate"
+                    {...form.register('endDate')}
+                    onChange={(e) => {
+                      form.setValue('endDate', e.target.value || undefined);
+                      clearErrors();
+                    }}
                     type="date" 
-                    className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]"
-                    disabled={isPending}
+                    className="rounded-lg border border-[#e5e7eb] bg-[#f9fafb]" 
                   />
+                  {form.formState.errors.endDate && (
+                    <p className="text-sm text-red-600 mt-1">{form.formState.errors.endDate.message}</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
           )}
-
-          <div className="flex justify-between w-full mt-6">
-            <div className="flex gap-2">
-              {activeTab === 'settings' && (
-                <Button
-                  type="button"
-                  onClick={() => setActiveTab('basic')}
-                  className="px-6 py-2 bg-gray-100 border border-gray-300 text-black rounded-lg font-semibold shadow hover:bg-gray-200"
-                  disabled={isPending}
-                >
-                  Previous
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {activeTab === 'basic' ? (
-                <Button
-                  type="button"
-                  onClick={() => setActiveTab('settings')}
-                  className="px-8 py-2 text-white bg-blue-700 rounded-lg font-semibold shadow hover:bg-blue-800"
-                  disabled={!isBasicTabValid() || isPending}
-                >
-                  Next
-                </Button>
+          
+          <div className="flex justify-end w-full max-w-2xl mt-6">
+            <Button
+              type="submit"
+              className="px-8 py-2 text-white bg-blue-700 rounded-lg font-semibold shadow hover:bg-blue-800"
+              disabled={isSubmitting || !!rateLimitError}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Poll...
+                </>
               ) : (
-                <Button
-                  type="submit"
-                  className="px-8 py-2 text-white bg-blue-700 rounded-lg font-semibold shadow hover:bg-blue-800"
-                  disabled={isPending}
-                >
-                  {isPending ? 'Creating Poll...' : 'Create Poll'}
-                </Button>
+                'Create Poll'
               )}
-            </div>
+            </Button>
           </div>
         </form>
       </div>
@@ -274,7 +343,15 @@ function NewPollPage() {
   );
 }
 
-export default withAuth(NewPollPage);
+const NewPollPageWithAuth = withAuth(NewPollPage);
+
+export default function NewPollPageWrapper() {
+  return (
+    <ErrorBoundary>
+      <NewPollPageWithAuth />
+    </ErrorBoundary>
+  );
+}
 
 
 

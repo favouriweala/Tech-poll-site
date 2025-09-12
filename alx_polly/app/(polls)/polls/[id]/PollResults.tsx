@@ -1,6 +1,13 @@
 'use client';
+/**
+ * PollResults component displays the results of a poll.
+ * @param poll - The poll object containing the poll details.
+ * @param userVotes - An array of user vote IDs.
+ * @param showVotes - A boolean indicating whether to show the votes.
+ * @returns A React component displaying the poll results.
+ */
 
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { createOptimizedVoteProcessor } from '@/lib/vote-utils';
 
 interface PollOption {
@@ -25,7 +32,7 @@ interface PollResultsProps {
   showVotes: boolean;
 }
 
-export default function PollResults({ poll, userVotes, showVotes }: PollResultsProps) {
+const PollResults = memo(function PollResults({ poll, userVotes, showVotes }: PollResultsProps) {
   // OPTIMIZED: Use efficient vote processor instead of repeated array operations
   const voteProcessor = useMemo(() => 
     createOptimizedVoteProcessor(poll.options), 
@@ -129,4 +136,6 @@ export default function PollResults({ poll, userVotes, showVotes }: PollResultsP
       )}
     </div>
   );
-}
+});
+
+export default PollResults;

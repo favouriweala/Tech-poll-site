@@ -3,8 +3,9 @@
 
 import { useState, useTransition } from 'react';
 import { deletePoll } from '@/lib/actions';
+import type { UsePollDeleteReturn } from '@/lib/types';
 
-export function usePollDelete() {
+export function usePollDelete(): UsePollDeleteReturn {
   const [isPending, startTransition] = useTransition();
   const [deletingPollId, setDeletingPollId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
@@ -16,11 +17,18 @@ export function usePollDelete() {
     
     startTransition(async () => {
       try {
-        await deletePoll(pollId);
-        setShowDeleteConfirm(null);
-      } catch (error) {
+        setDeletingPollId(pollId);
+        const result = await deletePoll(pollId);
+        
+        if (result.success) {
+          setShowDeleteConfirm(null);
+          setError(null);
+        } else {
+          setError(result.error);
+        }
+      } catch (error: unknown) {
         console.error('Failed to delete poll:', error);
-        setError('Failed to delete poll. Please try again.');
+        setError(error instanceof Error ? error.message : 'Failed to delete poll. Please try again.');
       } finally {
         setDeletingPollId(null);
       }

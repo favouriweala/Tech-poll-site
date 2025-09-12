@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { PollOption } from '@/lib/types';
+import { PollOption, UseVoteStatsReturn } from '@/lib/types';
 import { VoteStatsManager } from '@/lib/vote-cache';
 import { createOptimizedVoteProcessor, VoteStatistics } from '@/lib/vote-utils';
 
@@ -13,11 +13,8 @@ interface UseVoteStatsOptions {
   refreshInterval?: number;
 }
 
-interface UseVoteStatsReturn {
-  stats: VoteStatistics;
-  isLoading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
+// Extend the base return type with additional utility functions
+interface ExtendedUseVoteStatsReturn extends UseVoteStatsReturn {
   getVoteCount: (optionId: string) => number;
   getPercentage: (optionId: string) => number;
   isWinning: (optionId: string) => boolean;
@@ -29,7 +26,7 @@ export function useVoteStats({
   options,
   enableCaching = true,
   refreshInterval = 30000, // 30 seconds
-}: UseVoteStatsOptions): UseVoteStatsReturn {
+}: UseVoteStatsOptions): ExtendedUseVoteStatsReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheKey, setCacheKey] = useState(0);
@@ -50,11 +47,25 @@ export function useVoteStats({
   const [cachedStats, setCachedStats] = useState<VoteStatistics | null>(null);
   
   const stats = useMemo(() => {
+    let voteStats: VoteStatistics;
     if (enableCaching && cachedStats) {
-      return cachedStats;
+      voteStats = cachedStats;
+    } else {
+      voteStats = voteProcessor.getStats();
     }
-    return voteProcessor.getStats();
-  }, [voteProcessor, cachedStats, enableCaching]);
+    
+    // Convert VoteStatistics to UseVoteStatsReturn format
+    return {
+      totalVotes: voteStats.totalVotes,
+      uniqueVoters: voteStats.uniqueVoters,
+      optionStats: options.map(option => ({
+        optionId: option.option_id,
+        voteCount: voteStats.percentages[option.option_id] ? 
+          Math.round((voteStats.percentages[option.option_id] / 100) * voteStats.totalVotes) : 0,
+        percentage: voteStats.percentages[option.option_id] || 0
+      }))
+    };
+  }, [voteProcessor, cachedStats, enableCaching, options]);
 
   // Refresh function with caching support
   const refresh = useCallback(async () => {
@@ -69,7 +80,22 @@ export function useVoteStats({
 
     try {
       const freshStats = await statsManager.getVoteStats(pollId, true);
-      setCachedStats(freshStats);
+      // Convert VoteStatsManager result to VoteStatistics format
+      const convertedStats: VoteStatistics = {
+        totalVotes: freshStats.totalVotes,
+        uniqueVoters: freshStats.uniqueVoters,
+        maxVotes: Math.max(...Object.values(freshStats.optionStats)),
+        winningOptions: Object.entries(freshStats.optionStats)
+          .filter(([_, count]) => count === Math.max(...Object.values(freshStats.optionStats)))
+          .map(([optionId]) => optionId),
+        percentages: Object.fromEntries(
+          Object.entries(freshStats.optionStats).map(([optionId, count]) => [
+            optionId,
+            freshStats.totalVotes > 0 ? Math.round((count / freshStats.totalVotes) * 100) : 0
+          ])
+        )
+      };
+      setCachedStats(convertedStats);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh vote statistics');
     } finally {
@@ -89,7 +115,24 @@ export function useVoteStats({
   useEffect(() => {
     if (enableCaching) {
       statsManager.getVoteStats(pollId, false)
-        .then(setCachedStats)
+        .then(freshStats => {
+          // Convert VoteStatsManager result to VoteStatistics format
+          const convertedStats: VoteStatistics = {
+            totalVotes: freshStats.totalVotes,
+            uniqueVoters: freshStats.uniqueVoters,
+            maxVotes: Math.max(...Object.values(freshStats.optionStats)),
+            winningOptions: Object.entries(freshStats.optionStats)
+              .filter(([_, count]) => count === Math.max(...Object.values(freshStats.optionStats)))
+              .map(([optionId]) => optionId),
+            percentages: Object.fromEntries(
+              Object.entries(freshStats.optionStats).map(([optionId, count]) => [
+                optionId,
+                freshStats.totalVotes > 0 ? Math.round((count / freshStats.totalVotes) * 100) : 0
+              ])
+            )
+          };
+          setCachedStats(convertedStats);
+        })
         .catch(() => {
           // Fallback to local calculation if cache fails
           setCachedStats(null);

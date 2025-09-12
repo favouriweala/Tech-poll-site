@@ -1,9 +1,47 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { Button } from '@/components/ui/button';
-import { submitVote } from '@/lib/actions';
+/**
+ * PollVotingForm Component
+ * 
+ * WHAT: Interactive voting interface that allows users to cast votes on poll options
+ * with adaptive behavior for single-choice vs multiple-choice polls.
+ * 
+ * WHY: A dedicated voting component is essential because:
+ * 1. Voting is the core interaction in a polling application
+ * 2. Different poll types (single vs multiple choice) require different UI behavior
+ * 3. Real-time validation prevents user errors and improves experience
+ * 4. Loading states provide feedback during network operations
+ * 5. Accessibility ensures all users can participate in voting
+ * 6. Error handling guides users through voting issues
+ * 
+ * HOW: Uses React state and transitions for smooth user experience:
+ * - useState manages selected options with different logic per poll type
+ * - useTransition provides loading states without blocking UI
+ * - Form validation prevents submission of invalid selections
+ * - Server actions handle vote submission with proper error handling
+ * - Accessible radio/checkbox inputs ensure proper keyboard navigation
+ * 
+ * Features:
+ * - Single and multiple selection support
+ * - Real-time form validation
+ * - Optimistic UI updates with loading states
+ * - Error handling and user feedback
+ * - Accessible form controls (radio/checkbox)
+ * - Prevents duplicate submissions
+ * 
+ * @component
+ */
 
+import { useState, useTransition } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { submitVote } from '@/lib/actions';
+import { VoteSubmissionSchema, validateRateLimit } from '@/lib/validation-utils';
+
+/** Represents a poll option with voting statistics */
 interface PollOption {
   option_id: string;
   option_text: string;
@@ -12,6 +50,7 @@ interface PollOption {
   vote_percentage: number;
 }
 
+/** Complete poll data structure for voting */
 interface Poll {
   id: string;
   title: string;
@@ -20,42 +59,111 @@ interface Poll {
   options: PollOption[];
 }
 
+/** Props for the PollVotingForm component */
 interface PollVotingFormProps {
+  /** Poll data containing options and settings */
   poll: Poll;
+  /** Optional authenticated user ID */
   userId?: string;
+  /** Whether multiple selections are allowed */
   allowMultiple: boolean;
 }
 
+type VoteFormData = z.infer<typeof VoteSubmissionSchema>;
+
+/**
+ * PollVotingForm Component Implementation
+ * 
+ * Renders an interactive voting form that adapts to poll settings (single/multiple choice).
+ * Handles vote submission with proper error handling and loading states.
+ * 
+ * @param poll - Poll data with options and settings
+ * @param userId - Optional authenticated user ID for vote attribution
+ * @param allowMultiple - Whether multiple option selection is allowed
+ * @returns React component for poll voting interface
+ */
 export default function PollVotingForm({ poll, userId, allowMultiple }: PollVotingFormProps) {
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string>('');
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
 
+  const form = useForm<VoteFormData>({
+    resolver: zodResolver(VoteSubmissionSchema),
+    defaultValues: {
+      pollId: poll.id,
+      optionIds: []
+    }
+  });
+
+  /**
+   * Handles option selection/deselection based on poll type
+   * 
+   * WHY: Different poll types require different selection logic:
+   * - Single choice polls should replace the current selection (radio behavior)
+   * - Multiple choice polls should toggle selections (checkbox behavior)
+   * - This prevents user confusion and ensures correct voting behavior
+   */
   const handleOptionChange = (optionId: string) => {
+    const currentOptions = form.getValues('optionIds');
+    
     if (allowMultiple) {
-      setSelectedOptions(prev => 
-        prev.includes(optionId) 
-          ? prev.filter(id => id !== optionId)
-          : [...prev, optionId]
+      const isSelected = currentOptions.includes(optionId);
+      form.setValue('optionIds', 
+        isSelected 
+          ? currentOptions.filter(id => id !== optionId)
+          : [...currentOptions, optionId]
       );
     } else {
-      setSelectedOptions([optionId]);
+      form.setValue('optionIds', [optionId]);
     }
+    
+    // Clear errors when user makes a selection
+    if (error) setError('');
+    if (rateLimitError) setRateLimitError(null);
   };
 
-  const handleSubmit = async () => {
-    if (selectedOptions.length === 0) {
-      setError('Please select at least one option');
-      return;
+  // Rate limiting check
+  const checkRateLimit = (): boolean => {
+    const rateLimit = validateRateLimit('submit_vote', 10, 60000); // 10 votes per minute
+    if (!rateLimit.allowed) {
+      const resetTime = new Date(rateLimit.resetTime).toLocaleTimeString();
+      setRateLimitError(`Too many vote attempts. Please try again after ${resetTime}.`);
+      return false;
     }
+    setRateLimitError(null);
+    return true;
+  };
 
+  /**
+   * Handles vote submission with validation and error handling
+   * 
+   * WHY: Comprehensive vote submission handling is crucial because:
+   * - Client-side validation prevents unnecessary server requests
+   * - Loading states inform users that their vote is being processed
+   * - Error handling provides clear feedback for voting issues
+   * - Multiple option submission requires proper sequencing for multiple-choice polls
+   */
+  const handleSubmit = async (data: VoteFormData) => {
     setError('');
     
     startTransition(async () => {
       try {
+        // Check rate limiting
+        if (!checkRateLimit()) {
+          return;
+        }
+
         // Submit votes for all selected options
-        for (const optionId of selectedOptions) {
-          await submitVote(poll.id, optionId, userId);
+        const result = await submitVote(poll.id, data.optionIds, userId);
+        
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+        
+        // Clear rate limiting data on successful vote
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('rate_limit_submit_vote');
         }
         // Page will be revalidated and show results
       } catch (err) {
@@ -71,10 +179,16 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
           {allowMultiple ? 'Select one or more options:' : 'Select one option:'}
         </h3>
         
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
+        {(error || rateLimitError) && (
+          <Alert variant="destructive">
+            <AlertDescription>{error || rateLimitError}</AlertDescription>
+          </Alert>
+        )}
+
+        {form.formState.errors.optionIds && (
+          <Alert variant="destructive">
+            <AlertDescription>{form.formState.errors.optionIds.message}</AlertDescription>
+          </Alert>
         )}
 
         {poll.options.map((option) => (
@@ -87,7 +201,7 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
               type={allowMultiple ? 'checkbox' : 'radio'}
               name={allowMultiple ? 'poll-options' : 'poll-option'}
               value={option.option_id}
-              checked={selectedOptions.includes(option.option_id)}
+              checked={form.watch('optionIds').includes(option.option_id)}
               onChange={() => handleOptionChange(option.option_id)}
               className="mr-4 h-5 w-5 text-blue-600"
               disabled={isPending}
@@ -101,8 +215,8 @@ export default function PollVotingForm({ poll, userId, allowMultiple }: PollVoti
 
       <div className="flex justify-center pt-4">
         <Button
-          onClick={handleSubmit}
-          disabled={selectedOptions.length === 0 || isPending}
+          onClick={form.handleSubmit(handleSubmit)}
+          disabled={form.watch('optionIds').length === 0 || isPending || !!rateLimitError}
           className="bg-black text-white hover:bg-gray-800 px-8 py-3 text-lg font-bold min-w-[150px]"
         >
           {isPending ? 'Submitting...' : 'Submit Vote'}
