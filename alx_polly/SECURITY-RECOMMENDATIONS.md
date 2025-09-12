@@ -236,10 +236,15 @@ export async function validateSession(request: NextRequest) {
 
 ```typescript
 // middleware.ts - Enhanced with better security
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+
 export async function middleware(request: NextRequest) {
   const protectedPaths = ['/dashboard', '/polls/new', '/profile'];
   const authPaths = ['/login', '/register'];
-  
+
+  let supabaseResponse = NextResponse.next({ request });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -262,61 +267,20 @@ export async function middleware(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   // Redirect unauthenticated users from protected routes
   if (protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }
-  
+
   // Redirect authenticated users from auth pages
   if (authPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     if (user) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
-  
+
   return supabaseResponse;
 }
-```
-
-## Implementation Priority
-
-1. **Immediate (Critical)**:
-   - Remove debug console.log statements
-   - Implement rate limiting
-   - Sanitize error messages
-
-2. **Short-term (1-2 weeks)**:
-   - Add password strength validation
-   - Implement security headers
-   - Enhance protected routes
-
-3. **Medium-term (1 month)**:
-   - Add comprehensive audit logging
-   - Implement 2FA (if needed)
-   - Add security monitoring
-
-## Security Checklist
-
-- [ ] Remove all debug console.log statements
-- [ ] Implement rate limiting for auth endpoints
-- [ ] Add password strength validation
-- [ ] Sanitize error messages
-- [ ] Add security headers
-- [ ] Implement proper protected routes
-- [ ] Set up environment variable validation
-- [ ] Add session timeout handling
-- [ ] Enable Supabase audit logs
-- [ ] Test authentication flow thoroughly
-
-## Monitoring Recommendations
-
-1. **Set up Supabase Auth logs monitoring**
-2. **Implement failed login attempt alerts**
-3. **Monitor for unusual authentication patterns**
-4. **Regular security audits of dependencies**
-
-Remember: Security is an ongoing process. Regularly review and update these implementations as your application grows.
-
