@@ -33,7 +33,7 @@ reviews:
   # Path-based review settings
   path_instructions:
     # Next.js Components - Focus on performance and accessibility
-    - path: "app/**/*.tsx"
+    - path: "alx_polly/app/**/*.tsx"
       instructions: |
         When reviewing Next.js components, pay special attention to:
         - Component composition and hierarchy optimization
@@ -52,7 +52,7 @@ reviews:
         - Secure prop validation and sanitization
 
     # Server Actions - Focus on security and error handling
-    - path: "app/lib/actions/*.ts"
+    - path: "alx_polly/app/lib/actions/*.ts"
       instructions: |
         When reviewing Server Actions, check for:
         - Input validation and sanitization
@@ -71,7 +71,7 @@ reviews:
         - API endpoint hardening
 
     # Database and API - Focus on data integrity
-    - path: "lib/supabase/*.ts"
+    - path: "alx_polly/lib/supabase/*.ts"
       instructions: |
         When reviewing database and API code:
         - Check for proper error handling
@@ -89,7 +89,7 @@ reviews:
         - Validate data encryption
 
     # Authentication and Authorization
-    - path: "app/(auth)/**/*.tsx"
+    - path: "alx_polly/app/(auth)/**/*.tsx"
       instructions: |
         When reviewing authentication code:
         - Verify secure password handling
@@ -100,7 +100,6 @@ reviews:
         - Check for secure password reset flow
         - Validate JWT handling
         - Monitor for brute force protection
-
   # Severity levels for different types of issues
   severity:
     critical:
