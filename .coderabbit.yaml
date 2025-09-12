@@ -89,28 +89,6 @@ reviews:
         - Check for secure password reset flow
         - Validate JWT handling
         - Monitor for brute force protection
-<<<<<<< HEAD
-  # Severity levels for different types of issues
-  severity:
-    critical:
-      - security_vulnerabilities
-      - memory_leaks
-      - authentication_bypass
-      - data_exposure
-    high:
-      - performance_issues
-      - security_misconfiguration
-      - insecure_dependencies
-    medium:
-      - code_style_violations
-      - accessibility_issues
-      - type_safety_concerns
-    low:
-      - documentation_missing
-      - code_duplication
-      - naming_conventions
-=======
->>>>>>> e64cc19 (chore: add CodeRabbit configuration for automated code reviews)
 
   # AI-powered code metrics
   code_metrics:
