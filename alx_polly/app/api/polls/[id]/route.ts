@@ -4,14 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 // GET /api/polls/[id] - Retrieves a single poll with results
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const pollId = params.id
+  const resolvedParams = await params
+  const pollId = resolvedParams.id
 
   try {
     const supabase = await createServerSupabaseClient()
@@ -64,7 +65,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/polls/[id] - Deletes a poll
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const pollId = params.id
+  const resolvedParams = await params
+  const pollId = resolvedParams.id
 
   try {
     const supabase = await createServerSupabaseClient()

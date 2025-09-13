@@ -2,15 +2,16 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { NextRequest, NextResponse } from 'next/server'
 
-interface RouteParams {
-  params: {
+ interface RouteParams {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 // GET /api/polls/[id]/votes - Retrieves user's votes for a poll
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const pollId = params.id
+  const resolvedParams = await params
+  const pollId = resolvedParams.id
 
   try {
     const supabase = await createServerSupabaseClient()

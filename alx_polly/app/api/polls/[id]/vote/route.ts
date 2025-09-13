@@ -2,16 +2,18 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
+import { pollUpdateEmitter } from '@/lib/events';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 // POST /api/polls/[id]/vote - Submits a vote
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const pollId = params.id
+  const resolvedParams = await params
+  const pollId = resolvedParams.id
 
   try {
     const body = await request.json()
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     revalidatePath(`/polls/${pollId}`)
+    pollUpdateEmitter.emit(`update-${pollId}`);
     return NextResponse.json({ success: true })
 
   } catch (error) {
